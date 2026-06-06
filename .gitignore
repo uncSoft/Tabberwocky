@@ -1,6 +1,7 @@
 # Build artifacts
 .build/
 *.app
+*.zip
 DerivedData/
 .build-test/
 .swiftpm/
