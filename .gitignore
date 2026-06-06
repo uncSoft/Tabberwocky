@@ -12,3 +12,6 @@ DerivedData/
 # Xcode
 xcuserdata/
 *.xcuserstate
+
+# Local-only Xcode project for the example (canonical build is SwiftPM / build.sh)
+Examples/DocumentTabsShowcase/*.xcodeproj
