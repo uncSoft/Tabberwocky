@@ -59,8 +59,11 @@ The same tab bar, restyled live. Tabberwocky takes any colors you give it.
   <img src="assets/sunset.png" width="49%" alt="Sunset theme">
 </p>
 
-### Custom per Tab Color and #Tag to color
-<img width="840" height="479" alt="image" src="https://github.com/user-attachments/assets/5c34c409-f97a-47b7-b963-5f2927e0ab0c" />
+### Custom per-tab color & color-from-#tag
+
+<p align="center">
+  <img src="assets/custom-tab-color.png" width="80%" alt="Right-click a tab to set a custom color, or color it from the document's #tag">
+</p>
 
 ## Install
 
