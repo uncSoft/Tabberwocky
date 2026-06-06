@@ -71,6 +71,23 @@ public struct TabberwockyStyle {
     }
 }
 
+/// Attribution for apps that integrate Tabberwocky. Using it only requires keeping
+/// the MIT license notice; this is a convenience for showing voluntary credit in an
+/// About / acknowledgements screen:
+///
+/// ```swift
+/// Text(TabberwockyInfo.attribution)   // "Tab styling by Tabberwocky (MIT) · …"
+/// Link("Tabberwocky", destination: TabberwockyInfo.url)
+/// ```
+public enum TabberwockyInfo {
+    public static let name = "Tabberwocky"
+    public static let author = "uncSoft"
+    public static let license = "MIT"
+    public static let url = URL(string: "https://github.com/uncSoft/Tabberwocky")!
+    /// A ready-to-display one-line credit.
+    public static let attribution = "Tab styling by Tabberwocky (MIT) · github.com/uncSoft/Tabberwocky"
+}
+
 /// Styles the native document tab bar to match your app.
 ///
 /// ```swift

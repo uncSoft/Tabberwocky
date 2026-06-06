@@ -275,6 +275,27 @@ Tabberwocky is early and actively evolving. Planned:
 
 Contributions and ideas welcome.
 
+## Credits
+
+Using Tabberwocky only requires keeping the MIT license notice. If you'd like to
+credit it in your app (an About / acknowledgements screen, a README, a tweet),
+that's appreciated but optional. Copy-paste:
+
+> Tab styling by [Tabberwocky](https://github.com/uncSoft/Tabberwocky) (MIT)
+
+Plain text:
+
+```
+Tabberwocky by uncSoft — https://github.com/uncSoft/Tabberwocky
+```
+
+Or pull it from code (`TabberwockyInfo`):
+
+```swift
+Text(TabberwockyInfo.attribution)               // "Tab styling by Tabberwocky (MIT) · …"
+Link("Tabberwocky", destination: TabberwockyInfo.url)
+```
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
