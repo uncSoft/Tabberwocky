@@ -134,7 +134,8 @@ readable white so saturated fills stay legible.
 ## Example
 
 [`Examples/DocumentTabsShowcase`](Examples/DocumentTabsShowcase) is a real,
-minimal `DocumentGroup` app that consumes the library and demonstrates everything:
+minimal `DocumentGroup` app that **consumes Tabberwocky as a Swift package**
+(via a local path while developing) and demonstrates everything:
 
 - 6 themes incl. **Rainbow** (per-tab colors)
 - **Right-click a tab → preset / custom color / "Color from #tag" / clear** — with

@@ -4,9 +4,16 @@ cd "$(dirname "$0")"
 
 APP="DocumentTabsShowcase"
 BUNDLE="$APP.app"
-TARGET="arm64-apple-macos15.0"
-LIB="../../Sources/Tabberwocky/Tabberwocky.swift"   # the Tabberwocky library source
 
+# Build via SwiftPM — this resolves the Tabberwocky package dependency and compiles
+# the app as a separate module, so `import Tabberwocky` and the library's public API
+# boundary are exercised exactly as they would be in a real consumer.
+echo "Building via SwiftPM (consuming the Tabberwocky package)…"
+swift build -c release
+BIN=".build/release/$APP"
+
+# Wrap the SwiftPM-built binary into a proper .app bundle (DocumentGroup needs an
+# Info.plist with document types; resources are loaded via Bundle.main).
 rm -rf "$BUNDLE"
 mkdir -p "$BUNDLE/Contents/MacOS" "$BUNDLE/Contents/Resources"
 
@@ -53,18 +60,14 @@ cat > "$BUNDLE/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-# Bundle the sample docs, the skill .md, the library source, and this example's source —
+# Sample docs + the skill .md + this example's source + the library source —
 # so the running app can open them all as tabs.
 cp Resources/*.txt "$BUNDLE/Contents/Resources/"
 cp Resources/*.md  "$BUNDLE/Contents/Resources/"
 cp Sources/*.swift "$BUNDLE/Contents/Resources/"
-cp "$LIB"          "$BUNDLE/Contents/Resources/"
+cp ../../Sources/Tabberwocky/Tabberwocky.swift "$BUNDLE/Contents/Resources/"
 
-echo "Compiling…"
-swiftc -O -target "$TARGET" \
-  -framework SwiftUI -framework AppKit -framework UniformTypeIdentifiers \
-  -o "$BUNDLE/Contents/MacOS/$APP" \
-  "$LIB" Sources/*.swift
+cp "$BIN" "$BUNDLE/Contents/MacOS/$APP"
 
 codesign --force --sign - "$BUNDLE" 2>/dev/null || true
 echo "Built $BUNDLE"

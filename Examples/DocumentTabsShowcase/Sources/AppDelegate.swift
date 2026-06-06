@@ -1,4 +1,5 @@
 import AppKit
+import Tabberwocky
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillFinishLaunching(_ notification: Notification) {
