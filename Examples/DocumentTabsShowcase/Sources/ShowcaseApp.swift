@@ -1,4 +1,5 @@
 import SwiftUI
+import Tabberwocky
 
 @main
 struct ShowcaseApp: App {
@@ -74,7 +75,7 @@ struct EditorView: View {
 /// Left sidebar listing groups (colored dot + name + count). Click a group header
 /// to collapse/expand its tabs in the single tab bar; click a file to select it.
 struct GroupSidebar: View {
-    @ObservedObject private var manager = TabGroupManager.shared
+    @ObservedObject private var manager = appGroups
     @ObservedObject private var theme = ShowcaseTheme.shared
 
     var body: some View {
@@ -87,7 +88,7 @@ struct GroupSidebar: View {
                 Button {
                     if let name = TabContextMenuController.promptName(
                         title: "New Group", default: "Group \(manager.groups.count + 1)") {
-                        manager.addGroup(name: name)
+                        manager.addGroup(name)
                     }
                 } label: {
                     Image(systemName: "plus").font(.system(size: 10, weight: .semibold))

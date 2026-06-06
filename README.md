@@ -78,9 +78,11 @@ The same tab bar, restyled live. Tabberwocky takes any colors you give it.
 **Single file**
 
 Or just drag [`Sources/Tabberwocky/Tabberwocky.swift`](Sources/Tabberwocky/Tabberwocky.swift)
-into your target. No dependencies. Want colors to persist across launches? Add the
-optional [`TabberwockyColorStore.swift`](Sources/Tabberwocky/TabberwockyColorStore.swift)
-too (see [Persistence](#persistence)).
+into your target. No dependencies. Two optional add-on files:
+[`TabberwockyColorStore.swift`](Sources/Tabberwocky/TabberwockyColorStore.swift) for
+[persistence](#persistence), and
+[`TabberwockyGroups.swift`](Sources/Tabberwocky/TabberwockyGroups.swift) for
+[tab groups](#tab-groups).
 
 ## Usage
 
@@ -185,6 +187,43 @@ If you already compose your own `fillForTab` (rainbow, tag colors, whatever), sk
 only the storage, it doesn't take over. Pass a custom `UserDefaults` /
 `storageKey` to the initializer if you need to namespace or use an app group.
 
+## Tab groups
+
+Optional add-on: [`TabberwockyGroups.swift`](Sources/Tabberwocky/TabberwockyGroups.swift).
+Safari-style tab groups for a document app, **kept inside one window**.
+
+The trick: a native tab group *is* one `NSWindow`, so multiple real groups would be
+multiple windows. Instead, all your document windows share **one** native tab group,
+and a "group" is a label + color + expanded flag over a *subset* of those tabs.
+Collapsing a group orders its windows out of the single stack; expanding re-tabs
+them in. One self-contained window, color-coded groups you can collapse to focus.
+
+Hand each document window to the engine as you open it, then drive it from your UI:
+
+```swift
+let groups = TabberwockyGroups()                       // one shared instance
+
+// as each document window opens:
+groups.register(window, url: doc.fileURL!, group: "Notes")
+
+// color tabs by group (compose with your own fillForTab, or use attachColors()):
+Tabberwocky.shared.fillForTab = { _, url, _ in groups.color(forURL: url) }
+Tabberwocky.shared.start(reapplyOn: [TabberwockyGroups.didChange])
+
+// from your sidebar / menus:
+groups.toggle(group.id)       // collapse / expand (won't collapse the last group)
+groups.assign(url, to: id)    // move a doc to a group (keeps focus, recolors)
+groups.addGroup("Drafts")     // new group
+groups.select(url)            // front a doc's tab
+```
+
+`groups` is an `ObservableObject` (`@Published groups`), so a SwiftUI sidebar reacts
+to assignments live. The example's `GroupSidebar` is a ready reference for that UI.
+This is window-tabbing only (no public-API risk), but it does rely on the same
+single-tab-group model above.
+
+![Tab groups: a color-coded sidebar over a single native tab group](assets/tab-groups.png)
+
 ## Example
 
 [`Examples/DocumentTabsShowcase`](Examples/DocumentTabsShowcase) is a real,
@@ -194,17 +233,14 @@ minimal `DocumentGroup` app that **consumes Tabberwocky as a Swift package**
 - 6 themes incl. **Rainbow** (per-tab colors)
 - **Right-click a tab → preset / custom color / "Color from #tag" / clear** — with
   live recolor as you edit the tag
-- **Tab groups (experimental):** a sidebar of color-coded groups you can
-  collapse/expand, plus create-group and right-click "Move to Group". Built on a
-  single native tab group (a group is a color + collapse state over a subset of
-  tabs), so it stays one self-contained window. See the demo's `TabGroupManager`.
+- **[Tab groups](#tab-groups):** a sidebar of color-coded groups you can
+  collapse/expand, plus create-group and right-click "Move to Group", driven by the
+  library's `TabberwockyGroups`. `GroupSidebar` is the reference SwiftUI for it.
 - It opens its own source (and this library) as tabs, so it's self-documenting
 
 ```sh
 cd Examples/DocumentTabsShowcase && ./build.sh && open DocumentTabsShowcase.app
 ```
-
-![Tab groups: a color-coded sidebar over a single native tab group](assets/tab-groups.png)
 
 ## How it works
 

@@ -1,6 +1,10 @@
 import AppKit
 import Tabberwocky
 
+/// The library's group engine, shared across the app (AppDelegate seeds it, the
+/// sidebar drives it, the right-click menu assigns into it).
+let appGroups = TabberwockyGroups(tabbingIdentifier: "vault")
+
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillFinishLaunching(_ notification: Notification) {
         // Enable native window tabbing. We DON'T force "always" here: we group
@@ -44,7 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             case .none:
                 break
             }
-            if let groupColor = TabGroupManager.shared.color(forTabURL: url) { return groupColor }
+            if let groupColor = appGroups.color(forURL: url) { return groupColor }
             if ShowcaseTheme.shared.mode == .rainbow {
                 return ShowcaseTheme.shared.tabFillNS(index: index, active: active)
             }
@@ -65,7 +69,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return NSColor.white.withAlphaComponent(active ? 1.0 : 0.85)
         }
         Tabberwocky.shared.start(reapplyOn: [.showcaseThemeChanged, .tabColorsChanged,
-                                             TabberwockyColorStore.colorsChanged])
+                                             TabberwockyColorStore.colorsChanged,
+                                             TabberwockyGroups.didChange])
     }
 
     // Don't auto-open a blank untitled doc; we seed our own samples.
@@ -74,7 +79,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // Don't restore prior sessions — keep the showcase deterministic.
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool { false }
 
-    // PoC: two named groups, each becomes its own native tab group.
+    // Sample docs split across two starter groups (Docs = teal, Source = purple).
     private let plan: [(group: String, file: String)] = [
         ("Docs",  "Custom Document Group Tabs.md"),
         ("Docs",  "Welcome.txt"),
@@ -85,26 +90,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ("Source", "Theme.swift"),
         ("Source", "TabColoring.swift"),
     ]
-
-    /// Group colors (teal for Docs, purple for Source).
     private let groupColors: [String: NSColor] = [
         "Docs":   NSColor(red: 0.20, green: 0.62, blue: 0.70, alpha: 1),
         "Source": NSColor(red: 0.55, green: 0.45, blue: 0.95, alpha: 1),
     ]
-
-    /// (url, window) opened per group, in tab order.
-    private var groupDocs: [String: [(URL, NSWindow)]] = [:]
-    /// The single tab group anchor — every doc tabs onto this one window.
-    private var seedAnchor: NSWindow?
+    private var firstURL: URL?
 
     private func seedGroups() {
         for doc in NSDocumentController.shared.documents { doc.close() }
-        groupDocs.removeAll(); seedAnchor = nil
+        firstURL = nil
         openNext(0)
     }
 
     private func openNext(_ i: Int) {
-        guard i < plan.count else { finishSeeding(); return }
+        guard i < plan.count else {
+            appGroups.apply(select: firstURL)   // all expanded, skill doc selected
+            Tabberwocky.shared.refresh()
+            return
+        }
         let (group, file) = plan[i]
         guard let url = Bundle.main.url(forResource: file, withExtension: nil) else {
             openNext(i + 1); return
@@ -113,28 +116,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             doc?.makeWindowControllers()
             guard let window = doc?.windowControllers.first?.window else { self.openNext(i + 1); return }
-            // One native tab group for everything: same identifier, all tabbed onto
-            // a single anchor. Groups are a logical layer on top (color + collapse).
-            window.tabbingIdentifier = TabGroupManager.tabbingID
-            if let anchor = self.seedAnchor {
-                anchor.addTabbedWindow(window, ordered: .above)
-            } else {
-                self.seedAnchor = window
-                window.makeKeyAndOrderFront(nil)
-            }
-            self.groupDocs[group, default: []].append((url, window))
+            // Hand the window to the library engine — it sets the shared tabbing id,
+            // tabs it into the single group, and records its group membership.
+            appGroups.register(window, url: url, group: group, color: self.groupColors[group])
+            if self.firstURL == nil { self.firstURL = url }
             self.openNext(i + 1)
         }
-    }
-
-    private func finishSeeding() {
-        let manager = TabGroupManager.shared
-        for name in NSOrderedSet(array: plan.map(\.group)).array as! [String] {
-            let color = groupColors[name] ?? .systemGray
-            manager.register(.init(name: name, color: color), members: groupDocs[name] ?? [])
-        }
-        // Everything expanded → all tabs visible, skill doc selected.
-        manager.apply(select: groupDocs["Docs"]?.first?.0)
-        Tabberwocky.shared.refresh()           // color tabs by group
     }
 }

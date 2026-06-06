@@ -167,7 +167,7 @@ final class TabContextMenuController: NSObject {
     private func moveToGroupMenuItem(url: URL) -> NSMenuItem {
         let item = NSMenuItem(title: "Move to Group", action: nil, keyEquivalent: "")
         let submenu = NSMenu()
-        for group in TabGroupManager.shared.groups {
+        for group in appGroups.groups {
             let gi = NSMenuItem(title: group.name, action: #selector(moveToGroup(_:)), keyEquivalent: "")
             gi.target = self
             gi.image = swatch(group.color)
@@ -186,15 +186,15 @@ final class TabContextMenuController: NSObject {
     @objc private func moveToGroup(_ sender: NSMenuItem) {
         guard let info = sender.representedObject as? [String: Any],
               let url = info["url"] as? URL, let id = info["group"] as? UUID else { return }
-        TabGroupManager.shared.assign(url, to: id)
+        appGroups.assign(url, to: id)
     }
 
     @objc private func moveToNewGroup(_ sender: NSMenuItem) {
         guard let url = sender.representedObject as? URL,
-              let name = Self.promptName(title: "New Group", default: "Group \(TabGroupManager.shared.groups.count + 1)")
+              let name = Self.promptName(title: "New Group", default: "Group \(appGroups.groups.count + 1)")
         else { return }
-        let id = TabGroupManager.shared.addGroup(name: name)
-        TabGroupManager.shared.assign(url, to: id)
+        let id = appGroups.addGroup(name)
+        appGroups.assign(url, to: id)
     }
 
     /// Simple text prompt (used for naming new groups).
