@@ -194,11 +194,17 @@ minimal `DocumentGroup` app that **consumes Tabberwocky as a Swift package**
 - 6 themes incl. **Rainbow** (per-tab colors)
 - **Right-click a tab → preset / custom color / "Color from #tag" / clear** — with
   live recolor as you edit the tag
+- **Tab groups (experimental):** a sidebar of color-coded groups you can
+  collapse/expand, plus create-group and right-click "Move to Group". Built on a
+  single native tab group (a group is a color + collapse state over a subset of
+  tabs), so it stays one self-contained window. See the demo's `TabGroupManager`.
 - It opens its own source (and this library) as tabs, so it's self-documenting
 
 ```sh
 cd Examples/DocumentTabsShowcase && ./build.sh && open DocumentTabsShowcase.app
 ```
+
+![Tab groups: a color-coded sidebar over a single native tab group](assets/tab-groups.png)
 
 ## How it works
 

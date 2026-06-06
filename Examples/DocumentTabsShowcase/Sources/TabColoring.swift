@@ -155,9 +155,60 @@ final class TabContextMenuController: NSObject {
         menu.addItem(colorMenuItem(title: "Tab Color", target: .fill, url: url))
         menu.addItem(colorMenuItem(title: "Label Color", target: .label, url: url))
 
+        menu.addItem(.separator())
+        menu.addItem(moveToGroupMenuItem(url: url))
+
         if let view = window.contentView?.superview {
             menu.popUp(positioning: nil, at: view.convert(event.locationInWindow, from: nil), in: view)
         }
+    }
+
+    /// Submenu listing the groups + "New Group…" to move this tab's document into.
+    private func moveToGroupMenuItem(url: URL) -> NSMenuItem {
+        let item = NSMenuItem(title: "Move to Group", action: nil, keyEquivalent: "")
+        let submenu = NSMenu()
+        for group in TabGroupManager.shared.groups {
+            let gi = NSMenuItem(title: group.name, action: #selector(moveToGroup(_:)), keyEquivalent: "")
+            gi.target = self
+            gi.image = swatch(group.color)
+            gi.representedObject = ["url": url, "group": group.id]
+            submenu.addItem(gi)
+        }
+        submenu.addItem(.separator())
+        let new = NSMenuItem(title: "New Group…", action: #selector(moveToNewGroup(_:)), keyEquivalent: "")
+        new.target = self
+        new.representedObject = url
+        submenu.addItem(new)
+        item.submenu = submenu
+        return item
+    }
+
+    @objc private func moveToGroup(_ sender: NSMenuItem) {
+        guard let info = sender.representedObject as? [String: Any],
+              let url = info["url"] as? URL, let id = info["group"] as? UUID else { return }
+        TabGroupManager.shared.assign(url, to: id)
+    }
+
+    @objc private func moveToNewGroup(_ sender: NSMenuItem) {
+        guard let url = sender.representedObject as? URL,
+              let name = Self.promptName(title: "New Group", default: "Group \(TabGroupManager.shared.groups.count + 1)")
+        else { return }
+        let id = TabGroupManager.shared.addGroup(name: name)
+        TabGroupManager.shared.assign(url, to: id)
+    }
+
+    /// Simple text prompt (used for naming new groups).
+    static func promptName(title: String, default defaultName: String) -> String? {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.addButton(withTitle: "Create")
+        alert.addButton(withTitle: "Cancel")
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 220, height: 24))
+        field.stringValue = defaultName
+        alert.accessoryView = field
+        guard alert.runModal() == .alertFirstButtonReturn else { return nil }
+        let value = field.stringValue.trimmingCharacters(in: .whitespaces)
+        return value.isEmpty ? defaultName : value
     }
 
     /// A submenu of preset swatches + custom / from-#tag / clear, all routed to

@@ -20,3 +20,14 @@ Things to try:
   • Pick a color, then quit and relaunch — it comes back. Fixed colors persist
     via Tabberwocky's TabberwockyColorStore (UserDefaults, keyed by file URL).
     ("From #tag" is a live mode, so it stays for the session.)
+
+Tab groups (PoC):
+  • The sidebar lists color-coded GROUPS. All tabs live in ONE native tab group;
+    a "group" is just a color + collapse state over a subset of them.
+  • Click a group header to COLLAPSE/EXPAND it — collapsed groups drop out of the
+    tab bar, so you can focus or cycle. (The last open group won't collapse.)
+  • "＋" in the sidebar makes a new group; RIGHT-CLICK a tab → "Move to Group" to
+    assign it. The tab recolors to its group and keeps focus.
+  • Why one window: a native tab group IS one window, so multiple real groups
+    would be multiple windows. Keeping everything in one group + collapse/color is
+    how it stays self-contained.
