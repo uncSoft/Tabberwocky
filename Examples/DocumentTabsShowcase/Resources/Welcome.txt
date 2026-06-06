@@ -17,3 +17,6 @@ Things to try:
     (the text), each with presets, a custom color, "From #tag", or Clear. They're
     independent, so you can do a teal tab with a yellow label. Try "From #tag" on
     this file (it has #getting-started), then edit the tag and watch it live.
+  • Pick a color, then quit and relaunch — it comes back. Fixed colors persist
+    via Tabberwocky's TabberwockyColorStore (UserDefaults, keyed by file URL).
+    ("From #tag" is a live mode, so it stays for the session.)

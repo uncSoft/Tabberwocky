@@ -63,7 +63,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard Tabberwocky.shared.fillForTab?(index, url, active) != nil else { return nil }
             return NSColor.white.withAlphaComponent(active ? 1.0 : 0.85)
         }
-        Tabberwocky.shared.start(reapplyOn: [.showcaseThemeChanged, .tabColorsChanged])
+        Tabberwocky.shared.start(reapplyOn: [.showcaseThemeChanged, .tabColorsChanged,
+                                             TabberwockyColorStore.colorsChanged])
     }
 
     // Don't auto-open a blank untitled doc; we seed our own samples.

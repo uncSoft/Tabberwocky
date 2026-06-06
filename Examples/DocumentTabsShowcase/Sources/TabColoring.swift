@@ -1,7 +1,12 @@
 import AppKit
+import Tabberwocky
 
 extension Notification.Name {
     static let tabColorsChanged = Notification.Name("tabColorsChanged")
+}
+
+extension ColorTarget {
+    var role: TabberwockyColorStore.Role { self == .fill ? .fill : .label }
 }
 
 /// How a given document's tab should be colored.
@@ -16,24 +21,40 @@ enum ColorTarget { case fill, label }
 /// Per-document color overrides, keyed by file URL. Survives tab switching/reorder
 /// because it's keyed by the document, not the tab view. Tracks fill and label
 /// independently, so a tab can have (say) a teal fill with a yellow label.
+///
+/// Fixed color picks are backed by Tabberwocky's `TabberwockyColorStore`, so they
+/// PERSIST across launches. `.fromTag` is a live mode (recomputed from the file's
+/// tag each time), so it's kept in memory for the session.
 final class TabColorStore {
     static let shared = TabColorStore()
-    private var fillChoices: [String: TabColorChoice] = [:]
-    private var labelChoices: [String: TabColorChoice] = [:]
+    private let persisted = TabberwockyColorStore()   // fixed picks, persisted to UserDefaults
+    private var fromTagKeys: Set<String> = []          // session-only "use the #tag" mode
 
     func choice(for url: URL?, _ target: ColorTarget = .fill) -> TabColorChoice? {
-        guard let key = url?.absoluteString else { return nil }
-        return (target == .fill ? fillChoices : labelChoices)[key]
+        if let color = persisted.color(for: url, target.role) { return .fixed(color) }
+        if let key = key(url, target), fromTagKeys.contains(key) { return .fromTag }
+        return nil
     }
 
     func set(_ choice: TabColorChoice?, for url: URL?, _ target: ColorTarget = .fill) {
-        guard let key = url?.absoluteString else { return }
-        if target == .fill {
-            if let choice { fillChoices[key] = choice } else { fillChoices.removeValue(forKey: key) }
-        } else {
-            if let choice { labelChoices[key] = choice } else { labelChoices.removeValue(forKey: key) }
+        let key = key(url, target)
+        switch choice {
+        case .fixed(let color):
+            if let key { fromTagKeys.remove(key) }
+            persisted.setColor(color, for: url, target.role)        // persists + notifies
+        case .fromTag:
+            persisted.setColor(nil as NSColor?, for: url, target.role)  // drop any fixed color
+            if let key { fromTagKeys.insert(key) }
+            NotificationCenter.default.post(name: .tabColorsChanged, object: nil)
+        case .none:
+            if let key { fromTagKeys.remove(key) }
+            persisted.setColor(nil as NSColor?, for: url, target.role)  // notifies
         }
-        NotificationCenter.default.post(name: .tabColorsChanged, object: nil)
+    }
+
+    private func key(_ url: URL?, _ target: ColorTarget) -> String? {
+        guard let s = url?.absoluteString else { return nil }
+        return "\(s)#\(target.role.rawValue)"
     }
 }
 

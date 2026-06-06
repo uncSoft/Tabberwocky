@@ -78,7 +78,9 @@ The same tab bar, restyled live. Tabberwocky takes any colors you give it.
 **Single file**
 
 Or just drag [`Sources/Tabberwocky/Tabberwocky.swift`](Sources/Tabberwocky/Tabberwocky.swift)
-into your target. No dependencies.
+into your target. No dependencies. Want colors to persist across launches? Add the
+optional [`TabberwockyColorStore.swift`](Sources/Tabberwocky/TabberwockyColorStore.swift)
+too (see [Persistence](#persistence)).
 
 ## Usage
 
@@ -150,6 +152,36 @@ Tabberwocky.shared.textForTab = { index, documentURL, active in
 You can just as easily color labels by tag, dim background tabs harder, or anything
 else — it's the same per-tab signature as the fill.
 
+## Persistence
+
+`fillForTab` / `textForTab` are stateless, so where colors *live* is up to you. If
+you don't want to build that yourself, add the optional
+[`TabberwockyColorStore.swift`](Sources/Tabberwocky/TabberwockyColorStore.swift). It
+saves per-document fill and label colors to `UserDefaults`, keyed by file URL, so a
+tab keeps its color across launches.
+
+The whole thing, persisted, in four lines:
+
+```swift
+let colors = TabberwockyColorStore()
+colors.attach()                                              // wires fillForTab + textForTab
+Tabberwocky.shared.style = { /* your theme */ }
+Tabberwocky.shared.start(reapplyOn: [TabberwockyColorStore.colorsChanged])
+```
+
+Then set a color when the user picks one, and it sticks:
+
+```swift
+colors.setColor(.systemTeal,   for: document.fileURL, .fill)
+colors.setColor(.systemYellow, for: document.fileURL, .label)
+colors.setColor(nil,           for: document.fileURL, .fill)   // clear
+```
+
+If you already compose your own `fillForTab` (rainbow, tag colors, whatever), skip
+`attach()` and just read `colors.color(for:_:)` inside your closures — the store is
+only the storage, it doesn't take over. Pass a custom `UserDefaults` /
+`storageKey` to the initializer if you need to namespace or use an app group.
+
 ## Example
 
 [`Examples/DocumentTabsShowcase`](Examples/DocumentTabsShowcase) is a real,
@@ -193,8 +225,6 @@ dead-ends — is in
 
 Tabberwocky is early and actively evolving. Planned:
 
-- **Persistence** — opt-in saving of per-tab color overrides (keyed by file URL) so
-  a tab keeps its color across launches.
 - **Extensibility** — more hooks: per-tab icons, custom fonts, a `willStyleTab`
   callback, and a pluggable tab→document resolver.
 
