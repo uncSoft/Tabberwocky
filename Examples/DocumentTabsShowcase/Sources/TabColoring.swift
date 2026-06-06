@@ -10,20 +10,29 @@ enum TabColorChoice {
     case fromTag          // derive (live) from the document's first #tag
 }
 
+/// What a color choice applies to.
+enum ColorTarget { case fill, label }
+
 /// Per-document color overrides, keyed by file URL. Survives tab switching/reorder
-/// because it's keyed by the document, not the tab view.
+/// because it's keyed by the document, not the tab view. Tracks fill and label
+/// independently, so a tab can have (say) a teal fill with a yellow label.
 final class TabColorStore {
     static let shared = TabColorStore()
-    private var choices: [String: TabColorChoice] = [:]
+    private var fillChoices: [String: TabColorChoice] = [:]
+    private var labelChoices: [String: TabColorChoice] = [:]
 
-    func choice(for url: URL?) -> TabColorChoice? {
+    func choice(for url: URL?, _ target: ColorTarget = .fill) -> TabColorChoice? {
         guard let key = url?.absoluteString else { return nil }
-        return choices[key]
+        return (target == .fill ? fillChoices : labelChoices)[key]
     }
 
-    func set(_ choice: TabColorChoice?, for url: URL?) {
+    func set(_ choice: TabColorChoice?, for url: URL?, _ target: ColorTarget = .fill) {
         guard let key = url?.absoluteString else { return }
-        if let choice { choices[key] = choice } else { choices.removeValue(forKey: key) }
+        if target == .fill {
+            if let choice { fillChoices[key] = choice } else { fillChoices.removeValue(forKey: key) }
+        } else {
+            if let choice { labelChoices[key] = choice } else { labelChoices.removeValue(forKey: key) }
+        }
         NotificationCenter.default.post(name: .tabColorsChanged, object: nil)
     }
 }
@@ -78,6 +87,7 @@ final class TabContextMenuController: NSObject {
     static let shared = TabContextMenuController()
     private var monitor: Any?
     private var pendingURL: URL?
+    private var pendingTarget: ColorTarget = .fill
 
     func start() {
         monitor = NSEvent.addLocalMonitorForEvents(matching: .rightMouseDown) { [weak self] event in
@@ -107,64 +117,86 @@ final class TabContextMenuController: NSObject {
             .first { $0.fileURL?.lastPathComponent == title }?.fileURL
     }
 
+    private var presets: [(String, NSColor)] {
+        [("Red", rgb(0.95, 0.30, 0.32)), ("Orange", rgb(0.98, 0.56, 0.20)),
+         ("Yellow", rgb(0.95, 0.80, 0.22)), ("Green", rgb(0.36, 0.80, 0.42)),
+         ("Teal", rgb(0.20, 0.76, 0.76)), ("Blue", rgb(0.30, 0.56, 0.96)),
+         ("Purple", rgb(0.58, 0.46, 0.96)), ("Pink", rgb(0.92, 0.40, 0.70))]
+    }
+
     private func showMenu(for url: URL, event: NSEvent, in window: NSWindow) {
         let menu = NSMenu()
         let header = menu.addItem(withTitle: url.lastPathComponent, action: nil, keyEquivalent: "")
         header.isEnabled = false
         menu.addItem(.separator())
 
-        let presets: [(String, NSColor)] = [
-            ("Red", rgb(0.95, 0.30, 0.32)), ("Orange", rgb(0.98, 0.56, 0.20)),
-            ("Yellow", rgb(0.95, 0.80, 0.22)), ("Green", rgb(0.36, 0.80, 0.42)),
-            ("Teal", rgb(0.20, 0.76, 0.76)), ("Blue", rgb(0.30, 0.56, 0.96)),
-            ("Purple", rgb(0.58, 0.46, 0.96)), ("Pink", rgb(0.92, 0.40, 0.70)),
-        ]
-        for (name, color) in presets {
-            let item = NSMenuItem(title: name, action: #selector(pickPreset(_:)), keyEquivalent: "")
-            item.target = self
-            item.image = swatch(color)
-            item.representedObject = ["url": url, "color": color]
-            menu.addItem(item)
-        }
-
-        menu.addItem(.separator())
-        addItem(to: menu, "Custom Color…", #selector(pickCustom(_:)), url)
-        addItem(to: menu, "Color from #tag", #selector(pickFromTag(_:)), url)
-        menu.addItem(.separator())
-        addItem(to: menu, "Clear Color", #selector(clearColor(_:)), url)
+        // Two submenus: the tab fill, and (separately) the label text color.
+        menu.addItem(colorMenuItem(title: "Tab Color", target: .fill, url: url))
+        menu.addItem(colorMenuItem(title: "Label Color", target: .label, url: url))
 
         if let view = window.contentView?.superview {
             menu.popUp(positioning: nil, at: view.convert(event.locationInWindow, from: nil), in: view)
         }
     }
 
-    private func addItem(to menu: NSMenu, _ title: String, _ action: Selector, _ url: URL) {
+    /// A submenu of preset swatches + custom / from-#tag / clear, all routed to
+    /// the given target (the tab's fill or its label).
+    private func colorMenuItem(title: String, target: ColorTarget, url: URL) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        let submenu = NSMenu()
+        for (name, color) in presets {
+            let si = NSMenuItem(title: name, action: #selector(pickPreset(_:)), keyEquivalent: "")
+            si.target = self
+            si.image = swatch(color)
+            si.representedObject = ["url": url, "color": color, "target": target]
+            submenu.addItem(si)
+        }
+        submenu.addItem(.separator())
+        addItem(to: submenu, "Custom…", #selector(pickCustom(_:)), url, target)
+        addItem(to: submenu, "From #tag", #selector(pickFromTag(_:)), url, target)
+        submenu.addItem(.separator())
+        addItem(to: submenu, "Clear", #selector(clearColor(_:)), url, target)
+        item.submenu = submenu
+        return item
+    }
+
+    private func addItem(to menu: NSMenu, _ title: String, _ action: Selector,
+                         _ url: URL, _ target: ColorTarget) {
         let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
         item.target = self
-        item.representedObject = url
+        item.representedObject = ["url": url, "target": target]
         menu.addItem(item)
     }
 
+    private func info(_ sender: NSMenuItem) -> (url: URL?, target: ColorTarget) {
+        let dict = sender.representedObject as? [String: Any]
+        return (dict?["url"] as? URL, (dict?["target"] as? ColorTarget) ?? .fill)
+    }
+
     @objc private func pickPreset(_ sender: NSMenuItem) {
-        guard let info = sender.representedObject as? [String: Any],
-              let url = info["url"] as? URL, let color = info["color"] as? NSColor else { return }
-        TabColorStore.shared.set(.fixed(color), for: url)
+        let (url, target) = info(sender)
+        guard let color = (sender.representedObject as? [String: Any])?["color"] as? NSColor else { return }
+        TabColorStore.shared.set(.fixed(color), for: url, target)
     }
     @objc private func pickFromTag(_ sender: NSMenuItem) {
-        TabColorStore.shared.set(.fromTag, for: sender.representedObject as? URL)
+        let (url, target) = info(sender)
+        TabColorStore.shared.set(.fromTag, for: url, target)
     }
     @objc private func clearColor(_ sender: NSMenuItem) {
-        TabColorStore.shared.set(nil, for: sender.representedObject as? URL)
+        let (url, target) = info(sender)
+        TabColorStore.shared.set(nil, for: url, target)
     }
     @objc private func pickCustom(_ sender: NSMenuItem) {
-        pendingURL = sender.representedObject as? URL
+        let (url, target) = info(sender)
+        pendingURL = url
+        pendingTarget = target
         let panel = NSColorPanel.shared
         panel.setTarget(self)
         panel.setAction(#selector(colorPanelChanged(_:)))
         panel.makeKeyAndOrderFront(nil)
     }
     @objc private func colorPanelChanged(_ panel: NSColorPanel) {
-        TabColorStore.shared.set(.fixed(panel.color), for: pendingURL)
+        TabColorStore.shared.set(.fixed(panel.color), for: pendingURL, pendingTarget)
     }
 
     private func swatch(_ color: NSColor) -> NSImage {
