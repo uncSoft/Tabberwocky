@@ -1,0 +1,25 @@
+# How it works   #blue
+
+1. Standard SwiftUI document app:
+
+     DocumentGroup(newDocument: TextDocument()) { file in
+         EditorView(document: file.$document)
+     }
+
+2. Native window tabbing turned on in AppDelegate:
+
+     NSWindow.allowsAutomaticWindowTabbing = true
+     UserDefaults.standard.set("always", forKey: "AppleWindowTabbingMode")
+
+3. DocumentTabBarStyler walks the private NSTabBar view tree and recolors:
+     • the bar background
+     • each tab's fill
+     • the active tab's outline
+     • the tab labels (via attributedTitle)
+     • the + button (contentTintColor)
+
+   …re-applying on window/appearance notifications, because AppKit repaints
+   the bar on its own.
+
+Note: this touches private AppKit, so it is NOT App Store-safe — gate it to
+direct/Setapp builds. See docs/custom-document-group-tab-styling.md.

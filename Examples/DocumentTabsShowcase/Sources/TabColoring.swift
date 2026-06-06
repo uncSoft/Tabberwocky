@@ -1,0 +1,199 @@
+import AppKit
+
+extension Notification.Name {
+    static let tabColorsChanged = Notification.Name("tabColorsChanged")
+}
+
+/// How a given document's tab should be colored.
+enum TabColorChoice {
+    case fixed(NSColor)   // an explicit color the user picked
+    case fromTag          // derive (live) from the document's first #tag
+}
+
+/// Per-document color overrides, keyed by file URL. Survives tab switching/reorder
+/// because it's keyed by the document, not the tab view.
+final class TabColorStore {
+    static let shared = TabColorStore()
+    private var choices: [String: TabColorChoice] = [:]
+
+    func choice(for url: URL?) -> TabColorChoice? {
+        guard let key = url?.absoluteString else { return nil }
+        return choices[key]
+    }
+
+    func set(_ choice: TabColorChoice?, for url: URL?) {
+        guard let key = url?.absoluteString else { return }
+        if let choice { choices[key] = choice } else { choices.removeValue(forKey: key) }
+        NotificationCenter.default.post(name: .tabColorsChanged, object: nil)
+    }
+}
+
+/// Live document text keyed by URL, so "color from #tag" reflects unsaved edits.
+final class TabContentRegistry {
+    static let shared = TabContentRegistry()
+    private var text: [String: String] = [:]
+
+    func update(_ t: String, for url: URL?) {
+        guard let key = url?.absoluteString else { return }
+        text[key] = t
+    }
+    func text(for url: URL?) -> String? {
+        guard let key = url?.absoluteString else { return nil }
+        return text[key]
+    }
+}
+
+/// Derive a color from a document's first `#tag`.
+enum TabTagColor {
+    static func color(in text: String?) -> NSColor? {
+        guard let text,
+              let range = text.range(of: "#[A-Za-z0-9_][A-Za-z0-9_/-]*",
+                                     options: .regularExpression) else { return nil }
+        let tag = String(text[range].dropFirst()).lowercased()
+        return named[tag] ?? hashed(tag)
+    }
+
+    private static let named: [String: NSColor] = [
+        "red": rgb(0.95, 0.30, 0.32), "orange": rgb(0.98, 0.56, 0.20),
+        "yellow": rgb(0.95, 0.80, 0.22), "green": rgb(0.36, 0.80, 0.42),
+        "teal": rgb(0.20, 0.76, 0.76), "blue": rgb(0.30, 0.56, 0.96),
+        "purple": rgb(0.58, 0.46, 0.96), "violet": rgb(0.58, 0.46, 0.96),
+        "pink": rgb(0.92, 0.40, 0.70), "cyan": rgb(0.30, 0.82, 0.95)
+    ]
+
+    /// Stable FNV-1a hash → hue, so the same tag always maps to the same color.
+    private static func hashed(_ s: String) -> NSColor {
+        var h: UInt64 = 1469598103934665603
+        for b in s.utf8 { h = (h ^ UInt64(b)) &* 1099511628211 }
+        return NSColor(hue: CGFloat(h % 360) / 360, saturation: 0.62, brightness: 0.95, alpha: 1)
+    }
+
+    private static func rgb(_ r: Double, _ g: Double, _ b: Double) -> NSColor {
+        NSColor(red: r, green: g, blue: b, alpha: 1)
+    }
+}
+
+// MARK: - Right-click → choose color
+final class TabContextMenuController: NSObject {
+    static let shared = TabContextMenuController()
+    private var monitor: Any?
+    private var pendingURL: URL?
+
+    func start() {
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .rightMouseDown) { [weak self] event in
+            guard let self, let window = event.window,
+                  let url = self.tabURL(at: event.locationInWindow, in: window) else { return event }
+            self.showMenu(for: url, event: event, in: window)
+            return nil // consume — we handled this right-click
+        }
+    }
+
+    /// Find which tab the cursor is over → its document URL.
+    private func tabURL(at point: NSPoint, in window: NSWindow) -> URL? {
+        guard let root = window.contentView?.superview,
+              let bar = TreeSearch.first(in: root, named: "NSTabBar") else { return nil }
+        for tab in TreeSearch.all(in: bar, named: "NSTabButton") {
+            if tab.convert(tab.bounds, to: nil).contains(point) {
+                let title = (tab as AnyObject).value(forKey: "title") as? String
+                return Self.documentURL(forTitle: title)
+            }
+        }
+        return nil
+    }
+
+    static func documentURL(forTitle title: String?) -> URL? {
+        guard let title else { return nil }
+        return NSDocumentController.shared.documents
+            .first { $0.fileURL?.lastPathComponent == title }?.fileURL
+    }
+
+    private func showMenu(for url: URL, event: NSEvent, in window: NSWindow) {
+        let menu = NSMenu()
+        let header = menu.addItem(withTitle: url.lastPathComponent, action: nil, keyEquivalent: "")
+        header.isEnabled = false
+        menu.addItem(.separator())
+
+        let presets: [(String, NSColor)] = [
+            ("Red", rgb(0.95, 0.30, 0.32)), ("Orange", rgb(0.98, 0.56, 0.20)),
+            ("Yellow", rgb(0.95, 0.80, 0.22)), ("Green", rgb(0.36, 0.80, 0.42)),
+            ("Teal", rgb(0.20, 0.76, 0.76)), ("Blue", rgb(0.30, 0.56, 0.96)),
+            ("Purple", rgb(0.58, 0.46, 0.96)), ("Pink", rgb(0.92, 0.40, 0.70)),
+        ]
+        for (name, color) in presets {
+            let item = NSMenuItem(title: name, action: #selector(pickPreset(_:)), keyEquivalent: "")
+            item.target = self
+            item.image = swatch(color)
+            item.representedObject = ["url": url, "color": color]
+            menu.addItem(item)
+        }
+
+        menu.addItem(.separator())
+        addItem(to: menu, "Custom Color…", #selector(pickCustom(_:)), url)
+        addItem(to: menu, "Color from #tag", #selector(pickFromTag(_:)), url)
+        menu.addItem(.separator())
+        addItem(to: menu, "Clear Color", #selector(clearColor(_:)), url)
+
+        if let view = window.contentView?.superview {
+            menu.popUp(positioning: nil, at: view.convert(event.locationInWindow, from: nil), in: view)
+        }
+    }
+
+    private func addItem(to menu: NSMenu, _ title: String, _ action: Selector, _ url: URL) {
+        let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+        item.target = self
+        item.representedObject = url
+        menu.addItem(item)
+    }
+
+    @objc private func pickPreset(_ sender: NSMenuItem) {
+        guard let info = sender.representedObject as? [String: Any],
+              let url = info["url"] as? URL, let color = info["color"] as? NSColor else { return }
+        TabColorStore.shared.set(.fixed(color), for: url)
+    }
+    @objc private func pickFromTag(_ sender: NSMenuItem) {
+        TabColorStore.shared.set(.fromTag, for: sender.representedObject as? URL)
+    }
+    @objc private func clearColor(_ sender: NSMenuItem) {
+        TabColorStore.shared.set(nil, for: sender.representedObject as? URL)
+    }
+    @objc private func pickCustom(_ sender: NSMenuItem) {
+        pendingURL = sender.representedObject as? URL
+        let panel = NSColorPanel.shared
+        panel.setTarget(self)
+        panel.setAction(#selector(colorPanelChanged(_:)))
+        panel.makeKeyAndOrderFront(nil)
+    }
+    @objc private func colorPanelChanged(_ panel: NSColorPanel) {
+        TabColorStore.shared.set(.fixed(panel.color), for: pendingURL)
+    }
+
+    private func swatch(_ color: NSColor) -> NSImage {
+        let size = NSSize(width: 13, height: 13)
+        let image = NSImage(size: size)
+        image.lockFocus()
+        color.setFill()
+        NSBezierPath(roundedRect: NSRect(origin: .zero, size: size), xRadius: 3, yRadius: 3).fill()
+        image.unlockFocus()
+        return image
+    }
+    private func rgb(_ r: Double, _ g: Double, _ b: Double) -> NSColor {
+        NSColor(red: r, green: g, blue: b, alpha: 1)
+    }
+}
+
+/// Shared NSView tree search (used by both the styler and the menu controller).
+enum TreeSearch {
+    static func first(in view: NSView, named className: String) -> NSView? {
+        if String(describing: type(of: view)) == className { return view }
+        for sub in view.subviews {
+            if let hit = first(in: sub, named: className) { return hit }
+        }
+        return nil
+    }
+    static func all(in view: NSView, named className: String) -> [NSView] {
+        var out: [NSView] = []
+        if String(describing: type(of: view)) == className { out.append(view) }
+        for sub in view.subviews { out += all(in: sub, named: className) }
+        return out
+    }
+}

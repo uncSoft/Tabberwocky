@@ -1,0 +1,15 @@
+# Notes   #green
+
+The active tab is detected via the public NSWindowTabGroup:
+
+    window.tabGroup?.selectedWindow
+
+…NOT via NSButton state — NSTabButton isn't an NSButton, so it has no
+.state. It's a container view, but it's still KVC-compliant for `title`
+and `attributedTitle`, which is how the label gets recolored.
+
+The one thing you can't do on macOS 26: fully flatten the tab. The label
+and icon live inside the per-tab NSGlassEffectView, so hiding it to kill the
+"liquid glass" sheen also removes the label. You can only tint the glass.
+
+Everything else — bar color, fill, outline, label color, + tint — is yours.

@@ -1,0 +1,18 @@
+# Welcome   #getting-started
+
+This is a real SwiftUI DocumentGroup app.
+
+Each tab above is a separate document window that macOS has merged into a
+native tabbed window — the same tabs you get for free from DocumentGroup.
+
+What's different here: the tab bar is restyled to match the app's theme.
+Try the Dark / Light / Midnight switch in the header and watch the tabs
+re-theme live.
+
+Things to try:
+  • Click between tabs — the accent outline + label follow the active one.
+  • ⌘N or the + button — open another tab; it gets styled automatically.
+  • Switch the theme — bar, fill, outline, and labels all update.
+  • RIGHT-CLICK a tab — pick a preset color, a custom color, or "Color from
+    #tag". Try "Color from #tag" on this file (it has #getting-started), then
+    edit the tag and watch the tab recolor live.
