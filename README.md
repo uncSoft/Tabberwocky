@@ -1,19 +1,19 @@
 # Tabberwocky
 
 **Style the native macOS `DocumentGroup` document tabs.** Bar background, per-tab
-fill, active-tab outline, label colors, the `+` button — and dynamic per-tab
-colors at runtime — *without leaving `DocumentGroup`* and without building your own
+fill, active-tab outline, label colors, the `+` button - and dynamic per-tab
+colors at runtime - *without leaving `DocumentGroup`* and without building your own
 tab bar.
 
 The common wisdom is that you **can't** restyle the native window/document tab bar
-— it's private, end of story. You mostly can. Tabberwocky is the small, current
+- it's private, end of story. You mostly can. Tabberwocky is the small, current
 (macOS 26 "liquid glass"–aware) library that does it.
 
-![Rainbow theme — every tab its own color, reading the library's own source](assets/rainbow.png)
+![Rainbow theme - every tab its own color, reading the library's own source](assets/rainbow.png)
 
 > [!WARNING]
 > Tabberwocky reaches into the **private** AppKit tab-bar view tree
-> (`NSTabBar` / `NSTabButton`). It is **not App Store-safe** — review can reject
+> (`NSTabBar` / `NSTabButton`). It is **not App Store-safe** - review can reject
 > binaries that reference private class names. Gate it behind a non-App-Store build
 > flag (Developer ID / Setapp / direct distribution). See [Caveats](#caveats).
 
@@ -40,7 +40,7 @@ the chrome.
 | Element | |
 |---|---|
 | **Bar background** | matches your titlebar |
-| **Per-tab fill** | any color/alpha — uniform, by index, by tag, or a user pick |
+| **Per-tab fill** | any color/alpha - uniform, by index, by tag, or a user pick |
 | **Active outline** | accent border on the selected tab |
 | **Label colors** | active / inactive, plus per-tab via `textForTab` (sets `attributedTitle`) |
 | **`+` button** | tint the glyph |
@@ -112,7 +112,7 @@ NSWindow.allowsAutomaticWindowTabbing = true
 UserDefaults.standard.set("always", forKey: "AppleWindowTabbingMode")
 ```
 
-When your theme changes, call `Tabberwocky.shared.refresh()` — or pass your own
+When your theme changes, call `Tabberwocky.shared.refresh()` - or pass your own
 notification to `start(reapplyOn:)`:
 
 ```swift
@@ -122,7 +122,7 @@ Tabberwocky.shared.start(reapplyOn: [.myAppearanceChanged])
 ### Dynamic / per-tab colors
 
 Return a color per tab from `fillForTab` (return `nil` to use `style`). The tab's
-`documentURL` lets you key off the file — color by tag, by a user pick, anything.
+`documentURL` lets you key off the file - color by tag, by a user pick, anything.
 Indexed colors (a "rainbow") work too:
 
 ```swift
@@ -135,14 +135,14 @@ Tabberwocky.shared.fillForTab = { index, documentURL, active in
 ### Label text colors
 
 Labels are colored from `style.activeText` / `style.inactiveText` by default. For
-per-tab control there's a `textForTab` closure, symmetric with `fillForTab` — return
+per-tab control there's a `textForTab` closure, symmetric with `fillForTab` - return
 a color to override a single tab's label, or `nil` to fall back to the style.
 
 ![Per-tab label color, independent of the fill](assets/label-color.png)
 *The example wires this to a right-click "Label Color" menu, separate from the tab fill.*
 
 The library doesn't force any label color on you. The common case is keeping labels
-legible on saturated fills, which is one line — give any tab that has a custom fill a
+legible on saturated fills, which is one line - give any tab that has a custom fill a
 white label:
 
 ```swift
@@ -155,7 +155,7 @@ Tabberwocky.shared.textForTab = { index, documentURL, active in
 ```
 
 You can just as easily color labels by tag, dim background tabs harder, or anything
-else — it's the same per-tab signature as the fill.
+else - it's the same per-tab signature as the fill.
 
 ## Persistence
 
@@ -183,7 +183,7 @@ colors.setColor(nil,           for: document.fileURL, .fill)   // clear
 ```
 
 If you already compose your own `fillForTab` (rainbow, tag colors, whatever), skip
-`attach()` and just read `colors.color(for:_:)` inside your closures — the store is
+`attach()` and just read `colors.color(for:_:)` inside your closures - the store is
 only the storage, it doesn't take over. Pass a custom `UserDefaults` /
 `storageKey` to the initializer if you need to namespace or use an app group.
 
@@ -231,7 +231,7 @@ minimal `DocumentGroup` app that **consumes Tabberwocky as a Swift package**
 (via a local path while developing) and demonstrates everything:
 
 - 6 themes incl. **Rainbow** (per-tab colors)
-- **Right-click a tab → preset / custom color / "Color from #tag" / clear** — with
+- **Right-click a tab → preset / custom color / "Color from #tag" / clear** - with
   live recolor as you edit the tag
 - **[Tab groups](#tab-groups):** a sidebar of color-coded groups you can
   collapse/expand, plus create-group and right-click "Move to Group", driven by the
@@ -250,8 +250,8 @@ views, re-applying on the notifications AppKit fires when it repaints. Active ta
 is found via the public `NSWindowTabGroup` (the tab views aren't `NSButton`s, so
 they have no `.state`).
 
-The full write-up — verified view hierarchy, every piece enumerated, and the
-dead-ends — is in
+The full write-up - verified view hierarchy, every piece enumerated, and the
+dead-ends - is in
 [`docs/custom-document-group-tab-styling.md`](docs/custom-document-group-tab-styling.md).
 
 ## Caveats
@@ -261,7 +261,7 @@ dead-ends — is in
   Tabberwocky fails soft (does nothing) if it can't find the views. Verified on
   macOS 26.5.
 - **The Tahoe glass floor.** On macOS 26 each tab's label/icon live *inside* an
-  `NSGlassEffectView`, so you can **tint** the glass but can't fully remove it —
+  `NSGlassEffectView`, so you can **tint** the glass but can't fully remove it -
   a perfectly matte tab isn't possible without losing the label.
 - **Re-applies on notifications**, not a timer. AppKit repaints the bar on its own;
   Tabberwocky reasserts the style (coalesced) rather than polling.
@@ -270,7 +270,7 @@ dead-ends — is in
 
 Tabberwocky is early and actively evolving. Planned:
 
-- **Extensibility** — more hooks: per-tab icons, custom fonts, a `willStyleTab`
+- **Extensibility** - more hooks: per-tab icons, custom fonts, a `willStyleTab`
   callback, and a pluggable tab→document resolver.
 
 Contributions and ideas welcome.
@@ -286,7 +286,7 @@ that's appreciated but optional. Copy-paste:
 Plain text:
 
 ```
-Tabberwocky by uncSoft — https://github.com/uncSoft/Tabberwocky
+Tabberwocky by uncSoft - https://github.com/uncSoft/Tabberwocky
 ```
 
 Or pull it from code (`TabberwockyInfo`):
@@ -298,4 +298,4 @@ Link("Tabberwocky", destination: TabberwockyInfo.url)
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT - see [LICENSE](LICENSE).
