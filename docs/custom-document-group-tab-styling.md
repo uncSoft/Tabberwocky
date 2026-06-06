@@ -199,6 +199,27 @@ Typical use: accent color + `.medium` on the active tab, a dimmed color +
 `.regular` on the rest. You can also swap the per-tab icon via the KVC `image`
 property (defaults to the file-type icon).
 
+**Make it first-class, per tab.** Treat the label color exactly like the fill: a
+theme-level default (active / inactive) plus an optional per-tab override resolved
+the same way you resolve the fill. Keep the two independent — don't bake a rule like
+"a colored fill forces a white label" into the styler; let the caller decide, so a
+tab can have, say, a red fill with a yellow label if that's what they want.
+
+```swift
+// theme defaults
+let base = active ? style.activeText : style.inactiveText
+// per-tab override wins, else the default
+let labelColor = textForTab(index, documentURL, active) ?? base
+styleLabel(of: tab, color: labelColor, weight: active ? .medium : .regular)
+```
+
+The common "keep it readable on saturated fills" case is then just one line at the
+call site — return white from `textForTab` for any tab that also has a fill
+override — rather than a hidden behavior inside the styler. Same pattern works for
+coloring labels by tag, by document state, etc.
+
+> In Tabberwocky this is the `textForTab` closure, symmetric with `fillForTab`.
+
 ### 4e. The "+" button
 
 `NSTabBarNewTabButton` *is* a real `NSButton`, so it takes public properties —

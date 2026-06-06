@@ -49,6 +49,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             return nil
         }
+        // Per-tab label color. Any tab that gets a custom/rainbow fill also gets a
+        // white label so it stays readable; everyone else falls back to the theme's
+        // active/inactive text color (returning nil).
+        Tabberwocky.shared.textForTab = { index, url, active in
+            guard Tabberwocky.shared.fillForTab?(index, url, active) != nil else { return nil }
+            return NSColor.white.withAlphaComponent(active ? 1.0 : 0.85)
+        }
         Tabberwocky.shared.start(reapplyOn: [.showcaseThemeChanged, .tabColorsChanged])
     }
 

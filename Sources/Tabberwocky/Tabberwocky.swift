@@ -92,14 +92,26 @@ public final class Tabberwocky {
 
     /// Optional per-tab fill override — return a color to override `style` for a
     /// single tab (e.g. color-by-tag, a user pick, or a per-index "rainbow").
-    /// Return `nil` to fall back to `style`. When a tab has an override, its label
-    /// and outline switch to readable white so any saturated color stays legible.
+    /// Return `nil` to fall back to `style`.
     ///
     /// - Parameters:
     ///   - index: the tab's left→right position.
     ///   - documentURL: the tab's document file URL (nil for untitled docs).
     ///   - active: whether this is the selected tab.
     public var fillForTab: ((_ index: Int, _ documentURL: URL?, _ active: Bool) -> NSColor?)?
+
+    /// Optional per-tab **label color** override — symmetric with `fillForTab`.
+    /// Return a color to override `style.activeText` / `style.inactiveText` for a
+    /// single tab; return `nil` to fall back to the style.
+    ///
+    /// Use this to keep labels legible on saturated fills (e.g. return white for any
+    /// tab that also has a `fillForTab` color), or to color labels by tag.
+    ///
+    /// - Parameters:
+    ///   - index: the tab's left→right position.
+    ///   - documentURL: the tab's document file URL (nil for untitled docs).
+    ///   - active: whether this is the selected tab.
+    public var textForTab: ((_ index: Int, _ documentURL: URL?, _ active: Bool) -> NSColor?)?
 
     private var scheduled = false
 
@@ -157,12 +169,10 @@ public final class Tabberwocky {
 
             let fill = override.map { $0.withAlphaComponent(active ? 0.95 : 0.5) }
                      ?? (active ? s.activeFill : s.inactiveFill)
-            let text = override != nil
-                ? NSColor.white.withAlphaComponent(active ? 1.0 : 0.85)
-                : (active ? s.activeText : s.inactiveText)
-            let outline: NSColor? = override != nil
-                ? (active ? NSColor.white.withAlphaComponent(0.9) : nil)
-                : (active ? s.activeOutline : nil)
+            // Label color: per-tab override, else the theme's active/inactive text.
+            let text = textForTab?(i, url, active)
+                     ?? (active ? s.activeText : s.inactiveText)
+            let outline: NSColor? = active ? s.activeOutline : nil
 
             if s.flattenGlass,
                let glass = Tabberwocky.firstSubview(of: tab, named: "NSGlassEffectView"),

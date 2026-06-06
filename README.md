@@ -42,7 +42,7 @@ the chrome.
 | **Bar background** | matches your titlebar |
 | **Per-tab fill** | any color/alpha — uniform, by index, by tag, or a user pick |
 | **Active outline** | accent border on the selected tab |
-| **Label colors** | active / inactive, via `attributedTitle` |
+| **Label colors** | active / inactive, plus per-tab via `textForTab` (sets `attributedTitle`) |
 | **`+` button** | tint the glyph |
 
 <p align="center">
@@ -128,8 +128,27 @@ Tabberwocky.shared.fillForTab = { index, documentURL, active in
 }
 ```
 
-When a tab has an override color, Tabberwocky switches its label/outline to
-readable white so saturated fills stay legible.
+### Label text colors
+
+Labels are colored from `style.activeText` / `style.inactiveText` by default. For
+per-tab control there's a `textForTab` closure, symmetric with `fillForTab` — return
+a color to override a single tab's label, or `nil` to fall back to the style.
+
+The library doesn't force any label color on you. The common case is keeping labels
+legible on saturated fills, which is one line — give any tab that has a custom fill a
+white label:
+
+```swift
+Tabberwocky.shared.textForTab = { index, documentURL, active in
+    guard Tabberwocky.shared.fillForTab?(index, documentURL, active) != nil else {
+        return nil                                   // use style.activeText/inactiveText
+    }
+    return NSColor.white.withAlphaComponent(active ? 1.0 : 0.85)
+}
+```
+
+You can just as easily color labels by tag, dim background tabs harder, or anything
+else — it's the same per-tab signature as the fill.
 
 ## Example
 
@@ -174,8 +193,6 @@ dead-ends — is in
 
 Tabberwocky is early and actively evolving. Planned:
 
-- **Fuller label-text-color docs** — document the active/inactive label coloring
-  (and the override → white behavior) as a first-class feature, with examples.
 - **Persistence** — opt-in saving of per-tab color overrides (keyed by file URL) so
   a tab keeps its color across launches.
 - **Extensibility** — more hooks: per-tab icons, custom fonts, a `willStyleTab`
