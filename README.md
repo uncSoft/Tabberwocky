@@ -136,6 +136,9 @@ Labels are colored from `style.activeText` / `style.inactiveText` by default. Fo
 per-tab control there's a `textForTab` closure, symmetric with `fillForTab` — return
 a color to override a single tab's label, or `nil` to fall back to the style.
 
+![Per-tab label color, independent of the fill](assets/label-color.png)
+*The example wires this to a right-click "Label Color" menu, separate from the tab fill.*
+
 The library doesn't force any label color on you. The common case is keeping labels
 legible on saturated fills, which is one line — give any tab that has a custom fill a
 white label:
