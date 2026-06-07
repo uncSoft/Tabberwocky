@@ -11,6 +11,14 @@ The common wisdom is that you **can't** restyle the native window/document tab b
 
 ![Rainbow theme - every tab its own color, reading the library's own source](assets/rainbow.png)
 
+**See it in action** (themes, per-tab colors, right-click recolor, and collapsible
+tab groups):
+
+<video src="https://github.com/uncSoft/Tabberwocky/raw/main/assets/Tabberwocky_Demo.mp4" controls width="760"></video>
+
+<sub>▶︎ <a href="assets/Tabberwocky_Demo.mp4">Watch the full walkthrough</a> if the
+player doesn't load.</sub>
+
 > [!WARNING]
 > Tabberwocky reaches into the **private** AppKit tab-bar view tree
 > (`NSTabBar` / `NSTabButton`). It is **not App Store-safe** - review can reject
@@ -190,13 +198,20 @@ only the storage, it doesn't take over. Pass a custom `UserDefaults` /
 ## Tab groups
 
 Optional add-on: [`TabberwockyGroups.swift`](Sources/Tabberwocky/TabberwockyGroups.swift).
-Safari-style tab groups for a document app, **kept inside one window**.
+Safari-style document groups for a `DocumentGroup` app: a **color-coded sidebar** of
+groups you can **collapse to hide their tabs** and expand to bring them back — in
+order, with no flicker.
 
-The trick: a native tab group *is* one `NSWindow`, so multiple real groups would be
-multiple windows. Instead, all your document windows share **one** native tab group,
-and a "group" is a label + color + expanded flag over a *subset* of those tabs.
-Collapsing a group orders its windows out of the single stack; expanding re-tabs
-them in. One self-contained window, color-coded groups you can collapse to focus.
+**How the hiding works (the shadow window).** A native tab group shows *all* its
+member windows, and there's no supported way to hide just one. The naive fix —
+ordering windows out and re-merging — is unstable (tabs pop into their own windows,
+flicker, go unresponsive). Instead, Tabberwocky parks a collapsed group's windows
+inside an **off-screen, transparent "shadow" window's tab group**, so they leave the
+visible bar while staying *validly tabbed* (no homeless windows → no stray singlets,
+the trick real apps use). Expanding moves them back, and the bar is rebuilt in
+canonical **model order** with **minimal moves** (already-visible tabs never shift, so
+they never flash "active" as others animate in). It's window-tabbing only — **no
+private API**.
 
 Hand each document window to the engine as you open it, then drive it from your UI:
 
@@ -211,18 +226,20 @@ Tabberwocky.shared.fillForTab = { _, url, _ in groups.color(forURL: url) }
 Tabberwocky.shared.start(reapplyOn: [TabberwockyGroups.didChange])
 
 // from your sidebar / menus:
-groups.toggle(group.id)       // collapse / expand (won't collapse the last group)
-groups.assign(url, to: id)    // move a doc to a group (keeps focus, recolors)
+groups.assign(url, to: id)    // move a doc to a group (recolors its tab)
 groups.addGroup("Drafts")     // new group
-groups.select(url)            // front a doc's tab
+groups.toggle(group.id)       // collapse → hide the group's tabs; expand → restore
+groups.select(url)            // jump to a doc's tab
 ```
 
 `groups` is an `ObservableObject` (`@Published groups`), so a SwiftUI sidebar reacts
-to assignments live. The example's `GroupSidebar` is a ready reference for that UI.
-This is window-tabbing only (no public-API risk), but it does rely on the same
-single-tab-group model above.
+live. The example's `GroupSidebar` is a ready reference. Collapsing the only expanded
+group re-expands the rest, so a header click is never a dead no-op.
 
-![Tab groups: a color-coded sidebar over a single native tab group](assets/tab-groups.png)
+Set `TabberwockyGroups.debugLogging = true` to log the full window / tab-group
+topology to the console (Console.app) while debugging collapse/expand.
+
+![Tab groups: collapsing a group hides its tabs; expanding restores them in order](assets/tab-groups.gif)
 
 ## Example
 
@@ -234,8 +251,9 @@ minimal `DocumentGroup` app that **consumes Tabberwocky as a Swift package**
 - **Right-click a tab → preset / custom color / "Color from #tag" / clear** - with
   live recolor as you edit the tag
 - **[Tab groups](#tab-groups):** a sidebar of color-coded groups you can
-  collapse/expand, plus create-group and right-click "Move to Group", driven by the
-  library's `TabberwockyGroups`. `GroupSidebar` is the reference SwiftUI for it.
+  collapse to **hide their tabs** (and expand to restore them, in order), plus
+  create-group and right-click "Move to Group", driven by the library's
+  `TabberwockyGroups`. `GroupSidebar` is the reference SwiftUI for it.
 - It opens its own source (and this library) as tabs, so it's self-documenting
 
 ```sh

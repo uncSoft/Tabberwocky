@@ -73,7 +73,8 @@ struct EditorView: View {
 }
 
 /// Left sidebar listing groups (colored dot + name + count). Click a group header
-/// to collapse/expand its tabs in the single tab bar; click a file to select it.
+/// to collapse it — its tabs are hidden from the bar (parked off-screen) and its
+/// file list folds; expand to restore them in order. Click a file to jump to its tab.
 struct GroupSidebar: View {
     @ObservedObject private var manager = appGroups
     @ObservedObject private var theme = ShowcaseTheme.shared

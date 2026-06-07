@@ -108,8 +108,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func openNext(_ i: Int) {
         guard i < plan.count else {
-            appGroups.apply(select: firstURL)   // all expanded, skill doc selected
-            Tabberwocky.shared.refresh()
+            if let firstURL { appGroups.select(firstURL) }   // skill doc selected
+            Tabberwocky.shared.refresh()                     // color tabs by group
             // Beta canary: log which private names/keys are still present.
             let probe = Tabberwocky.probe()
             NSLog(probe.allFound ? "✅ Tabberwocky probe: all private names found"

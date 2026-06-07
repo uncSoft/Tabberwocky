@@ -4,7 +4,7 @@ All notable changes to Tabberwocky. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com); the project is pre-2.0, so the API
 may still change between minor versions — pin to a version.
 
-## [Unreleased]
+## [1.1.0] - 2026-06-07
 
 ### Added
 - `TabberwockyPrivateNames` — the entire private-API surface (class names + KVC
@@ -13,9 +13,12 @@ may still change between minor versions — pin to a version.
 - `textForTab` — per-tab label color override, symmetric with `fillForTab`.
 - `TabberwockyColorStore` — optional drop-in persistence of per-document fill/label
   colors (UserDefaults, standardized URL keys).
-- `TabberwockyGroups` — optional Safari-style tab groups kept inside one window
-  (color + collapse/expand over a single native tab group), with `willClose`
-  cleanup so closed windows don't leak.
+- `TabberwockyGroups` — optional Safari-style tab groups: a color-coded set of
+  groups you can **collapse to hide their tabs and expand to restore them in order**.
+  Hiding parks a collapsed group's windows in an off-screen "shadow" tab group (no
+  private API, no stray singlet windows); restore rebuilds the bar in canonical order
+  with minimal moves (no flicker, no tabs flashing active). Includes `willClose`
+  cleanup so closed windows don't leak, and `debugLogging` for topology dumps.
 - `TabberwockyInfo` — attribution constants (`name`/`author`/`license`/`url` + a
   ready credit string).
 - `TabberwockyStyle.labelFont` — override the tab label font.
@@ -37,8 +40,8 @@ may still change between minor versions — pin to a version.
 - The private `title` read is guarded (`responds(to:)`) so a future OS that drops
   the key **fails soft instead of crashing** the host app.
 - `TabberwockyGroups` tab ordering no longer drifts across collapse/expand and
-  close cycles — `apply()` normalizes the group to the canonical order each pass
-  (`insertWindow(_:at:)`), and re-applies after a window closes.
+  close cycles — `apply()` rebuilds the visible bar in canonical model order each
+  pass (moving only out-of-place tabs), and re-applies after a window closes.
 
 ## [1.0.0]
 - Initial release: native `DocumentGroup`/`NSTabBar` styling (bar, per-tab fill,
