@@ -9,6 +9,9 @@ The common wisdom is that you **can't** restyle the native window/document tab b
 - it's private, end of story. You mostly can. Tabberwocky is the small, current
 (macOS 26 "liquid glass"–aware) library that does it.
 
+
+https://github.com/user-attachments/assets/853eaa17-dd68-4737-988c-f496a770cff3
+
 ![Rainbow theme - every tab its own color, reading the library's own source](assets/rainbow.png)
 
 **See it in action** (themes, per-tab colors, right-click recolor, and collapsible
