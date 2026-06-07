@@ -10,14 +10,12 @@ The common wisdom is that you **can't** restyle the native window/document tab b
 (macOS 26 "liquid glass"–aware) library that does it.
 
 
+**See it in action** — themes, per-tab colors, right-click recolor, and collapsible
+tab groups:
+
 https://github.com/user-attachments/assets/853eaa17-dd68-4737-988c-f496a770cff3
 
 ![Rainbow theme - every tab its own color, reading the library's own source](assets/rainbow.png)
-
-**See it in action** (themes, per-tab colors, right-click recolor, and collapsible
-tab groups):
-
-![Tab groups: collapsing a group hides its tabs; expanding restores them in order](assets/tab-groups.gif)
 
 > [!WARNING]
 > Tabberwocky reaches into the **private** AppKit tab-bar view tree

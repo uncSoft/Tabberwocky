@@ -6,6 +6,10 @@ DerivedData/
 .build-test/
 .swiftpm/
 
+# Demo videos — GitHub-hosted via user-attachments (drag into an issue/comment),
+# kept on disk locally. The inline GIF (assets/*.gif) stays tracked.
+assets/*.mp4
+
 # macOS
 .DS_Store
 
