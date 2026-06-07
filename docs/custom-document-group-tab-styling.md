@@ -145,7 +145,7 @@ let fill = isActive ? theme.activeFill : theme.inactiveFill
 
 // macOS 26: tint the glass that covers the layer.
 if let glass = firstSubview(of: tab, named: "NSGlassEffectView"),
-   glass.responds(to: Selector("setTintColor:")) {
+   glass.responds(to: Selector(("setTintColor:"))) {
     glass.setValue(fill, forKey: "tintColor")
 }
 
@@ -184,7 +184,7 @@ title and set its color/weight. This is how you color/weight the tab label.
 
 ```swift
 func styleLabel(of tab: NSView, color: NSColor, weight: NSFont.Weight) {
-    guard tab.responds(to: Selector("setAttributedTitle:")),
+    guard tab.responds(to: Selector(("setAttributedTitle:"))),
           let title = (tab as AnyObject).value(forKey: "title") as? String,
           !title.isEmpty else { return }
     let attributed = NSAttributedString(string: title, attributes: [
@@ -328,6 +328,14 @@ ones. Same codebase, no fork.
 
 ## 9. Complete reference implementation
 
+> **This is a conceptual snapshot.** The canonical, current implementation is the
+> package source — [`Sources/Tabberwocky/Tabberwocky.swift`](../Sources/Tabberwocky/Tabberwocky.swift)
+> (plus the optional `TabberwockyColorStore` / `TabberwockyGroups`). The shipping
+> code differs from the snippet below: it adds per-tab `fillForTab`/`textForTab`
+> overrides, resolves a tab's document by tab-group **window order** (not by title),
+> is `@MainActor`, and guards the private `title` read. Use this section to
+> understand the shape; copy from the source.
+
 Drop-in, appearance-driven. Wire your own palette into `Theme.current` and call
 `DocumentTabBarStyler.shared.start()` once at launch (gated as above).
 
@@ -385,7 +393,7 @@ final class DocumentTabBarStyler {
 
             // Fill (layer + macOS-26 glass tint)
             if let glass = firstSubview(of: tab, named: "NSGlassEffectView"),
-               glass.responds(to: Selector("setTintColor:")) {
+               glass.responds(to: Selector(("setTintColor:"))) {
                 glass.setValue(fill, forKey: "tintColor")
             }
             tab.wantsLayer = true
@@ -410,7 +418,7 @@ final class DocumentTabBarStyler {
     }
 
     private func styleLabel(of tab: NSView, color: NSColor, weight: NSFont.Weight) {
-        guard tab.responds(to: Selector("setAttributedTitle:")),
+        guard tab.responds(to: Selector(("setAttributedTitle:"))),
               let title = (tab as AnyObject).value(forKey: "title") as? String,
               !title.isEmpty else { return }
         let attributed = NSAttributedString(string: title, attributes: [

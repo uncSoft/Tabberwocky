@@ -9,5 +9,7 @@ let package = Package(
     ],
     targets: [
         .target(name: "Tabberwocky", path: "Sources/Tabberwocky"),
+        .testTarget(name: "TabberwockyTests", dependencies: ["Tabberwocky"],
+                    path: "Tests/TabberwockyTests"),
     ]
 )

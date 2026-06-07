@@ -49,6 +49,9 @@ public struct TabberwockyStyle {
     /// When true, Tabberwocky tints that glass toward the fill so the color shows.
     /// (You cannot fully *remove* the glass without losing the label — see README.)
     public var flattenGlass: Bool
+    /// Label font. `nil` uses the system font at 12pt (medium when active, regular
+    /// otherwise). Set this to match a non-default app UI font.
+    public var labelFont: NSFont?
 
     public init(barBackground: NSColor = .windowBackgroundColor,
                 activeFill: NSColor = NSColor.controlAccentColor.withAlphaComponent(0.18),
@@ -58,7 +61,8 @@ public struct TabberwockyStyle {
                 activeOutline: NSColor? = .controlAccentColor,
                 newButtonTint: NSColor? = .controlAccentColor,
                 cornerRadius: CGFloat = 7,
-                flattenGlass: Bool = true) {
+                flattenGlass: Bool = true,
+                labelFont: NSFont? = nil) {
         self.barBackground = barBackground
         self.activeFill = activeFill
         self.inactiveFill = inactiveFill
@@ -68,6 +72,7 @@ public struct TabberwockyStyle {
         self.newButtonTint = newButtonTint
         self.cornerRadius = cornerRadius
         self.flattenGlass = flattenGlass
+        self.labelFont = labelFont
     }
 }
 
@@ -100,9 +105,12 @@ public enum TabberwockyInfo {
 /// // ...later, when your theme changes:
 /// Tabberwocky.shared.refresh()
 /// ```
+@MainActor
 public final class Tabberwocky {
     public static let shared = Tabberwocky()
-    private init() {}
+    /// Public so you can instantiate independent stylers (e.g. for tests); most apps
+    /// just use `.shared`.
+    public init() {}
 
     /// Base colors. Evaluated on every re-apply so it can read your live theme.
     public var style: () -> TabberwockyStyle = { TabberwockyStyle() }
@@ -131,10 +139,17 @@ public final class Tabberwocky {
     public var textForTab: ((_ index: Int, _ documentURL: URL?, _ active: Bool) -> NSColor?)?
 
     private var scheduled = false
+    private var started = false
 
     /// Start styling. Re-applies automatically on key/update/resize; pass any extra
     /// notification names (e.g. your own "appearance changed" note) to also re-apply.
+    /// Safe to call once — repeated calls are ignored (no duplicate observers).
+    ///
+    /// Call on the main thread. Tabberwocky is `@MainActor`; all of it must run on
+    /// the main thread (it touches `NSApp` / `NSView`).
     public func start(reapplyOn extraNotifications: [Notification.Name] = []) {
+        guard !started else { return }
+        started = true
         let nc = NotificationCenter.default
         let names = [NSWindow.didBecomeKeyNotification,
                      NSWindow.didUpdateNotification,
@@ -152,14 +167,21 @@ public final class Tabberwocky {
         guard !scheduled else { return }
         scheduled = true
         DispatchQueue.main.async { [weak self] in
-            self?.scheduled = false
-            self?.apply()
+            MainActor.assumeIsolated {
+                self?.scheduled = false
+                self?.apply()
+            }
         }
     }
 
+    /// Style every window that has a document tab bar (not just the key window), so
+    /// separate document windows each keep up to date.
     private func apply() {
-        guard let window = NSApp.keyWindow ?? NSApp.windows.first,
-              let root = window.contentView?.superview,
+        for window in NSApp.windows { styleBar(in: window) }
+    }
+
+    private func styleBar(in window: NSWindow) {
+        guard let root = window.contentView?.superview,
               let bar = Tabberwocky.firstSubview(of: root, named: "NSTabBar") else { return }
         let s = style()
 
@@ -174,22 +196,25 @@ public final class Tabberwocky {
             Tabberwocky.firstSubview(of: bar, named: name)?.tw_setLayerBackground(.clear)
         }
 
-        // Tabs (left→right). Active = the selected window's position in the tab group.
+        // Tabs left→right. Resolve each tab's document by WINDOW order, not by title:
+        // the tab-group's windows are in display order, matching the tab frames, so
+        // tab[i] ↔ group.windows[i]. (Title-matching breaks on duplicate filenames
+        // and when "show all extensions" is off.)
         let tabs = Tabberwocky.allSubviews(of: bar, named: "NSTabButton")
             .sorted { $0.frame.minX < $1.frame.minX }
+        let groupWindows = window.tabGroup?.windows ?? [window]
         let activeIndex = Tabberwocky.activeTabIndex(in: window)
+
         for (i, tab) in tabs.enumerated() {
             let active = (i == activeIndex)
-            let title = (tab as AnyObject).value(forKey: "title") as? String
-            let url = Tabberwocky.documentURL(forTitle: title)
-            let override = fillForTab?(i, url, active)
+            let url = i < groupWindows.count ? Tabberwocky.documentURL(for: groupWindows[i]) : nil
 
-            let fill = override.map { $0.withAlphaComponent(active ? 0.95 : 0.5) }
-                     ?? (active ? s.activeFill : s.inactiveFill)
-            // Label color: per-tab override, else the theme's active/inactive text.
-            let text = textForTab?(i, url, active)
-                     ?? (active ? s.activeText : s.inactiveText)
+            // Respect the caller's color exactly (including alpha). The closure gets
+            // `active`, so a caller that wants dimming returns a dimmed color itself.
+            let fill = fillForTab?(i, url, active) ?? (active ? s.activeFill : s.inactiveFill)
+            let text = textForTab?(i, url, active) ?? (active ? s.activeText : s.inactiveText)
             let outline: NSColor? = active ? s.activeOutline : nil
+            let font = s.labelFont ?? .systemFont(ofSize: 12, weight: active ? .medium : .regular)
 
             if s.flattenGlass,
                let glass = Tabberwocky.firstSubview(of: tab, named: "NSGlassEffectView"),
@@ -209,7 +234,7 @@ public final class Tabberwocky {
                     layer.borderColor = nil
                 }
             }
-            Tabberwocky.setLabel(tab, color: text, weight: active ? .medium : .regular)
+            Tabberwocky.setLabel(tab, color: text, font: font)
         }
 
         if let tint = s.newButtonTint,
@@ -220,11 +245,20 @@ public final class Tabberwocky {
 
     // MARK: - Helpers (public so consumers can map tabs → documents too)
 
-    /// The document URL for a tab whose displayed title is `title`.
-    public static func documentURL(forTitle title: String?) -> URL? {
-        guard let title else { return nil }
-        return NSDocumentController.shared.documents
-            .first { $0.fileURL?.lastPathComponent == title }?.fileURL
+    /// The document URL backing a tabbed window (its `NSDocument`'s `fileURL`).
+    public static func documentURL(for window: NSWindow) -> URL? {
+        (window.windowController?.document as? NSDocument)?.fileURL
+    }
+
+    /// The document URL for a specific tab view, resolved by its position in the
+    /// window's tab group (robust to duplicate filenames / hidden extensions).
+    public static func documentURL(forTab tab: NSView, in window: NSWindow) -> URL? {
+        guard let root = window.contentView?.superview,
+              let bar = firstSubview(of: root, named: "NSTabBar") else { return nil }
+        let tabs = allSubviews(of: bar, named: "NSTabButton").sorted { $0.frame.minX < $1.frame.minX }
+        guard let i = tabs.firstIndex(of: tab) else { return nil }
+        let windows = window.tabGroup?.windows ?? [window]
+        return i < windows.count ? documentURL(for: windows[i]) : nil
     }
 
     /// Frontmost tab as a left→right index, via the public `NSWindowTabGroup`.
@@ -252,14 +286,21 @@ public final class Tabberwocky {
         return out
     }
 
+    /// Read a tab's private `title` safely. Guarded by `responds(to:)` so it returns
+    /// nil instead of raising `NSUnknownKeyException` if the key ever disappears.
+    static func safeTitle(of tab: NSView) -> String? {
+        guard tab.responds(to: NSSelectorFromString("title")) else { return nil }
+        return tab.value(forKey: "title") as? String
+    }
+
     /// Recolor a tab's label via its private-but-KVC-exposed `attributedTitle`.
-    static func setLabel(_ tab: NSView, color: NSColor, weight: NSFont.Weight) {
+    /// Note: this replaces the system-provided title; we assume it is plain text
+    /// (no system-inserted glyphs / edited markers, which today live elsewhere).
+    static func setLabel(_ tab: NSView, color: NSColor, font: NSFont) {
         guard tab.responds(to: Selector(("setAttributedTitle:"))),
-              let title = (tab as AnyObject).value(forKey: "title") as? String,
-              !title.isEmpty else { return }
+              let title = safeTitle(of: tab), !title.isEmpty else { return }
         let attributed = NSAttributedString(string: title, attributes: [
-            .foregroundColor: color,
-            .font: NSFont.systemFont(ofSize: 12, weight: weight)
+            .foregroundColor: color, .font: font
         ])
         (tab as AnyObject).setValue(attributed, forKey: "attributedTitle")
     }

@@ -25,6 +25,7 @@ enum ColorTarget { case fill, label }
 /// Fixed color picks are backed by Tabberwocky's `TabberwockyColorStore`, so they
 /// PERSIST across launches. `.fromTag` is a live mode (recomputed from the file's
 /// tag each time), so it's kept in memory for the session.
+@MainActor
 final class TabColorStore {
     static let shared = TabColorStore()
     private let persisted = TabberwockyColorStore()   // fixed picks, persisted to UserDefaults
@@ -59,6 +60,7 @@ final class TabColorStore {
 }
 
 /// Live document text keyed by URL, so "color from #tag" reflects unsaved edits.
+@MainActor
 final class TabContentRegistry {
     static let shared = TabContentRegistry()
     private var text: [String: String] = [:]
@@ -104,6 +106,7 @@ enum TabTagColor {
 }
 
 // MARK: - Right-click → choose color
+@MainActor
 final class TabContextMenuController: NSObject {
     static let shared = TabContextMenuController()
     private var monitor: Any?
@@ -119,23 +122,16 @@ final class TabContextMenuController: NSObject {
         }
     }
 
-    /// Find which tab the cursor is over → its document URL.
+    /// Find which tab the cursor is over → its document URL, reusing the library's
+    /// public helpers (window-order resolution, robust to duplicate names).
     private func tabURL(at point: NSPoint, in window: NSWindow) -> URL? {
         guard let root = window.contentView?.superview,
-              let bar = TreeSearch.first(in: root, named: "NSTabBar") else { return nil }
-        for tab in TreeSearch.all(in: bar, named: "NSTabButton") {
-            if tab.convert(tab.bounds, to: nil).contains(point) {
-                let title = (tab as AnyObject).value(forKey: "title") as? String
-                return Self.documentURL(forTitle: title)
-            }
+              let bar = Tabberwocky.firstSubview(of: root, named: "NSTabBar") else { return nil }
+        for tab in Tabberwocky.allSubviews(of: bar, named: "NSTabButton")
+            where tab.convert(tab.bounds, to: nil).contains(point) {
+            return Tabberwocky.documentURL(forTab: tab, in: window)
         }
         return nil
-    }
-
-    static func documentURL(forTitle title: String?) -> URL? {
-        guard let title else { return nil }
-        return NSDocumentController.shared.documents
-            .first { $0.fileURL?.lastPathComponent == title }?.fileURL
     }
 
     private var presets: [(String, NSColor)] {
@@ -282,22 +278,5 @@ final class TabContextMenuController: NSObject {
     }
     private func rgb(_ r: Double, _ g: Double, _ b: Double) -> NSColor {
         NSColor(red: r, green: g, blue: b, alpha: 1)
-    }
-}
-
-/// Shared NSView tree search (used by both the styler and the menu controller).
-enum TreeSearch {
-    static func first(in view: NSView, named className: String) -> NSView? {
-        if String(describing: type(of: view)) == className { return view }
-        for sub in view.subviews {
-            if let hit = first(in: sub, named: className) { return hit }
-        }
-        return nil
-    }
-    static func all(in view: NSView, named className: String) -> [NSView] {
-        var out: [NSView] = []
-        if String(describing: type(of: view)) == className { out.append(view) }
-        for sub in view.subviews { out += all(in: sub, named: className) }
-        return out
     }
 }

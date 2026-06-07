@@ -28,6 +28,7 @@
 
 import AppKit
 
+@MainActor
 public final class TabberwockyGroups: ObservableObject {
     /// Posted after any change (assign / toggle / register). Wire it into
     /// `Tabberwocky.shared.start(reapplyOn:)` so tab colors re-apply.
@@ -56,15 +57,31 @@ public final class TabberwockyGroups: ObservableObject {
         NSColor(red: 0.93, green: 0.40, blue: 0.62, alpha: 1),  // pink
     ]
 
+    private var willCloseObserver: NSObjectProtocol?
+
     public init(tabbingIdentifier: String = "TabberwockyGroup") {
         self.tabbingIdentifier = tabbingIdentifier
+        // Prune state when a document window closes (otherwise we'd hold a strong ref
+        // to it forever and keep operating on a dead window).
+        willCloseObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification, object: nil, queue: .main
+        ) { [weak self] note in
+            MainActor.assumeIsolated { self?.windowWillClose(note.object as? NSWindow) }
+        }
     }
+
+    deinit {
+        if let willCloseObserver { NotificationCenter.default.removeObserver(willCloseObserver) }
+    }
+
+    private func norm(_ url: URL) -> URL { url.standardizedFileURL }
 
     // MARK: Registration
 
     /// Add a document window to a group (creating the group if new). Sets the shared
     /// tabbing identifier and tabs the window into the single group.
     public func register(_ window: NSWindow, url: URL, group name: String, color: NSColor? = nil) {
+        let url = norm(url)
         window.tabbingIdentifier = tabbingIdentifier
         if let anchor { anchor.addTabbedWindow(window, ordered: .above) }
         else { anchor = window; window.makeKeyAndOrderFront(nil) }
@@ -74,11 +91,25 @@ public final class TabberwockyGroups: ObservableObject {
         changed()
     }
 
+    /// Remove a closed window from all state and re-seat the anchor if needed.
+    private func windowWillClose(_ window: NSWindow?) {
+        guard let window else { return }
+        let staleKeys = windowForURL.filter { $0.value === window }.map(\.key)
+        guard !staleKeys.isEmpty else { return }
+        for key in staleKeys {
+            windowForURL.removeValue(forKey: key)
+            for i in groups.indices { groups[i].docs.removeAll { $0.absoluteString == key } }
+        }
+        if anchor === window { anchor = windowForURL.values.first }
+        changed()
+    }
+
     // MARK: Queries
 
     public func color(forURL url: URL?) -> NSColor? {
         guard let url else { return nil }
-        return groups.first { $0.docs.contains(url) }?.color
+        let u = norm(url)
+        return groups.first { $0.docs.contains(u) }?.color
     }
     public func urls(in name: String) -> [URL] { groups.first { $0.name == name }?.docs ?? [] }
     public func count(_ name: String) -> Int { groups.first { $0.name == name }?.docs.count ?? 0 }
@@ -95,6 +126,7 @@ public final class TabberwockyGroups: ObservableObject {
 
     /// Move a document into a group, keeping focus on that document.
     public func assign(_ url: URL, to groupID: UUID) {
+        let url = norm(url)
         guard let target = groups.firstIndex(where: { $0.id == groupID }) else { return }
         for i in groups.indices { groups[i].docs.removeAll { $0 == url } }
         groups[target].docs.append(url)
@@ -112,15 +144,16 @@ public final class TabberwockyGroups: ObservableObject {
 
     /// Front a document's tab.
     public func select(_ url: URL) {
-        guard let window = windowForURL[url.absoluteString] else { return }
+        guard let window = windowForURL[norm(url).absoluteString] else { return }
         window.tabGroup?.selectedWindow = window
         window.makeKeyAndOrderFront(nil)
     }
 
     /// Point Tabberwocky's fill at group colors (simple case). To compose with your
     /// own per-tab logic, read `color(forURL:)` inside your `fillForTab` instead.
-    public func attachColors(to tabberwocky: Tabberwocky = .shared) {
-        tabberwocky.fillForTab = { [weak self] _, url, _ in self?.color(forURL: url) }
+    public func attachColors(to tabberwocky: Tabberwocky? = nil) {
+        let target = tabberwocky ?? .shared
+        target.fillForTab = { [weak self] _, url, _ in self?.color(forURL: url) }
     }
 
     // MARK: Reconcile
@@ -132,7 +165,7 @@ public final class TabberwockyGroups: ObservableObject {
         let hidden  = groups.filter { !$0.expanded }.flatMap(\.docs).compactMap { windowForURL[$0.absoluteString] }
         guard let anchorWindow = visible.first else { return }
 
-        let prefer = preferURL.flatMap { windowForURL[$0.absoluteString] }
+        let prefer = preferURL.flatMap { windowForURL[norm($0).absoluteString] }
         let desired = [prefer, NSApp.keyWindow].compactMap { $0 }.first { visible.contains($0) } ?? anchorWindow
 
         // Front a survivor first so we never hide the visible window with nothing

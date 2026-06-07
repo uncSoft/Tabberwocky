@@ -248,7 +248,9 @@ Short version: walk down from `window.contentView?.superview` to find the privat
 `NSTabBar`, then set layer colors / borders and KVC `attributedTitle` on the tab
 views, re-applying on the notifications AppKit fires when it repaints. Active tab
 is found via the public `NSWindowTabGroup` (the tab views aren't `NSButton`s, so
-they have no `.state`).
+they have no `.state`), and each tab resolves to its document by **tab-group window
+order** — `window.tabGroup.windows[i]` → `windowController.document.fileURL` — not by
+matching the title string (which breaks on duplicate filenames or hidden extensions).
 
 The full write-up - verified view hierarchy, every piece enumerated, and the
 dead-ends - is in
@@ -265,10 +267,18 @@ dead-ends - is in
   a perfectly matte tab isn't possible without losing the label.
 - **Re-applies on notifications**, not a timer. AppKit repaints the bar on its own;
   Tabberwocky reasserts the style (coalesced) rather than polling.
+- **Main-thread only.** Everything is `@MainActor` (it touches `NSApp`/`NSView`);
+  call it from the main thread. Clean under Swift 6 strict concurrency.
+- **You own contrast / accessibility.** Tabberwocky doesn't consult Reduce
+  Transparency or Increase Contrast — if you use saturated fills, pick label colors
+  that stay legible (and consider solid fills under Reduce Transparency).
+- **OS support.** Builds back to macOS 13 (it fails soft on older private layouts);
+  the styling is visually verified on macOS 26.5. The private hierarchy on 13/14 is
+  not separately verified — test on your floor.
 
 ## Roadmap
 
-Tabberwocky is early and actively evolving. Planned:
+Tabberwocky is pre-2.0 and the API may still move; pin to a version. Planned:
 
 - **Extensibility** - more hooks: per-tab icons, custom fonts, a `willStyleTab`
   callback, and a pluggable tab→document resolver.

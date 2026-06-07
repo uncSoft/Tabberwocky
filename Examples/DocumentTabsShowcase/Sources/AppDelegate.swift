@@ -3,8 +3,9 @@ import Tabberwocky
 
 /// The library's group engine, shared across the app (AppDelegate seeds it, the
 /// sidebar drives it, the right-click menu assigns into it).
-let appGroups = TabberwockyGroups(tabbingIdentifier: "vault")
+@MainActor let appGroups = TabberwockyGroups(tabbingIdentifier: "vault")
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillFinishLaunching(_ notification: Notification) {
         // Enable native window tabbing. We DON'T force "always" here: we group
@@ -41,14 +42,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Per-tab fill precedence: explicit right-click pick → the tab's GROUP color
         // → Rainbow (theme) → theme style.
         Tabberwocky.shared.fillForTab = { index, url, active in
+            // The library respects the alpha we return, so WE dim inactive tabs here
+            // for visual hierarchy (the closure knows `active`).
+            func dim(_ c: NSColor) -> NSColor { active ? c : c.withAlphaComponent(0.5) }
             switch TabColorStore.shared.choice(for: url) {
-            case .fixed(let color): return color
+            case .fixed(let color): return dim(color)
             case .fromTag:
-                if let c = TabTagColor.color(in: TabContentRegistry.shared.text(for: url)) { return c }
+                if let c = TabTagColor.color(in: TabContentRegistry.shared.text(for: url)) { return dim(c) }
             case .none:
                 break
             }
-            if let groupColor = appGroups.color(forURL: url) { return groupColor }
+            if let groupColor = appGroups.color(forURL: url) { return dim(groupColor) }
             if ShowcaseTheme.shared.mode == .rainbow {
                 return ShowcaseTheme.shared.tabFillNS(index: index, active: active)
             }

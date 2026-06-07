@@ -22,6 +22,7 @@
 
 import AppKit
 
+@MainActor
 public final class TabberwockyColorStore {
     /// Which part of the tab a stored color applies to.
     public enum Role: String { case fill, label }
@@ -72,16 +73,17 @@ public final class TabberwockyColorStore {
     /// Point Tabberwocky's `fillForTab` / `textForTab` at this store. Use when the
     /// stored colors are the *only* source of per-tab color. If you also do rainbow
     /// / tag / etc., skip this and read `color(for:_:)` inside your own closures.
-    public func attach(to tabberwocky: Tabberwocky = .shared) {
-        tabberwocky.fillForTab = { [weak self] _, url, _ in self?.color(for: url, .fill) }
-        tabberwocky.textForTab = { [weak self] _, url, _ in self?.color(for: url, .label) }
+    public func attach(to tabberwocky: Tabberwocky? = nil) {
+        let target = tabberwocky ?? .shared
+        target.fillForTab = { [weak self] _, url, _ in self?.color(for: url, .fill) }
+        target.textForTab = { [weak self] _, url, _ in self?.color(for: url, .label) }
     }
 
     // MARK: Storage
 
     private func key(_ url: URL?, _ role: Role) -> String? {
-        guard let s = url?.absoluteString else { return nil }
-        return "\(s)#\(role.rawValue)"
+        guard let url else { return nil }
+        return "\(url.standardizedFileURL.absoluteString)#\(role.rawValue)"
     }
 
     private func load() {

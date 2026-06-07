@@ -13,6 +13,7 @@ private func ns(_ r: Double, _ g: Double, _ b: Double, _ a: Double = 1) -> NSCol
 /// The showcase's theme. Drives both the SwiftUI editor and the native tab styler.
 /// The "bold" themes (Ocean, Sunset, Rainbow) demonstrate that the tab fill takes
 /// any color/alpha — Rainbow even gives every tab its own distinct fill.
+@MainActor
 final class ShowcaseTheme: ObservableObject {
     static let shared = ShowcaseTheme()
 
