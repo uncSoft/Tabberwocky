@@ -95,3 +95,21 @@ final class TabberwockyGroupsTests: XCTestCase {
         XCTAssertNil(groups.color(forURL: nil))
     }
 }
+
+@MainActor
+final class TabberwockyProbeTests: XCTestCase {
+
+    /// Smoke test: probe() runs without a window and reports on every private name
+    /// it relies on (all false here — there's no tab bar in a headless test). This
+    /// guards that the probe stays wired to the names table. The *real* canary is
+    /// running probe() against a live DocumentGroup window on each macOS beta.
+    func testProbeReportsAllTrackedNames() {
+        let result = Tabberwocky.probe()
+        XCTAssertNotNil(result.classes[TabberwockyPrivateNames.tabBar])
+        XCTAssertNotNil(result.classes[TabberwockyPrivateNames.tabButton])
+        XCTAssertNotNil(result.classes[TabberwockyPrivateNames.glassEffect])
+        XCTAssertNotNil(result.keys[TabberwockyPrivateNames.titleKey])
+        XCTAssertNotNil(result.keys[TabberwockyPrivateNames.tintColorKey])
+        XCTAssertFalse(result.allFound)   // no window → nothing found
+    }
+}

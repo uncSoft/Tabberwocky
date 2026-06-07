@@ -7,6 +7,9 @@ may still change between minor versions — pin to a version.
 ## [Unreleased]
 
 ### Added
+- `TabberwockyPrivateNames` — the entire private-API surface (class names + KVC
+  keys) in one public table, and `Tabberwocky.probe()` — a beta canary that reports
+  which private names are still present in a live window.
 - `textForTab` — per-tab label color override, symmetric with `fillForTab`.
 - `TabberwockyColorStore` — optional drop-in persistence of per-document fill/label
   colors (UserDefaults, standardized URL keys).
@@ -33,6 +36,9 @@ may still change between minor versions — pin to a version.
 ### Fixed
 - The private `title` read is guarded (`responds(to:)`) so a future OS that drops
   the key **fails soft instead of crashing** the host app.
+- `TabberwockyGroups` tab ordering no longer drifts across collapse/expand and
+  close cycles — `apply()` normalizes the group to the canonical order each pass
+  (`insertWindow(_:at:)`), and re-applies after a window closes.
 
 ## [1.0.0]
 - Initial release: native `DocumentGroup`/`NSTabBar` styling (bar, per-tab fill,

@@ -126,8 +126,8 @@ final class TabContextMenuController: NSObject {
     /// public helpers (window-order resolution, robust to duplicate names).
     private func tabURL(at point: NSPoint, in window: NSWindow) -> URL? {
         guard let root = window.contentView?.superview,
-              let bar = Tabberwocky.firstSubview(of: root, named: "NSTabBar") else { return nil }
-        for tab in Tabberwocky.allSubviews(of: bar, named: "NSTabButton")
+              let bar = Tabberwocky.firstSubview(of: root, named: TabberwockyPrivateNames.tabBar) else { return nil }
+        for tab in Tabberwocky.allSubviews(of: bar, named: TabberwockyPrivateNames.tabButton)
             where tab.convert(tab.bounds, to: nil).contains(point) {
             return Tabberwocky.documentURL(forTab: tab, in: window)
         }

@@ -102,6 +102,10 @@ public final class TabberwockyGroups: ObservableObject {
         }
         if anchor === window { anchor = windowForURL.values.first }
         changed()
+        // Re-normalize the remaining tabs once the close settles.
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated { self?.apply() }
+        }
     }
 
     // MARK: Queries
@@ -171,11 +175,25 @@ public final class TabberwockyGroups: ObservableObject {
         // Front a survivor first so we never hide the visible window with nothing
         // behind it (that blanks the whole window).
         anchorWindow.makeKeyAndOrderFront(nil)
+
+        // Ensure every visible window is in the group.
         for window in visible where window != anchorWindow {
             if anchorWindow.tabGroup?.windows.contains(window) != true {
                 anchorWindow.addTabbedWindow(window, ordered: .above)
             }
         }
+
+        // Normalize to the canonical (group, then doc) order. Without this, tabs
+        // drift across collapse/expand and close cycles — newly re-added windows
+        // land at the end instead of in their group's position.
+        if let group = anchorWindow.tabGroup {
+            for (target, window) in visible.enumerated() where target < group.windows.count {
+                if group.windows.firstIndex(of: window) != target {
+                    group.insertWindow(window, at: target)
+                }
+            }
+        }
+
         for window in hidden { window.orderOut(nil) }
 
         desired.tabGroup?.selectedWindow = desired

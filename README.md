@@ -276,6 +276,28 @@ dead-ends - is in
   the styling is visually verified on macOS 26.5. The private hierarchy on 13/14 is
   not separately verified — test on your floor.
 
+## Surviving OS updates
+
+The whole private-API blast radius is **one table** — `TabberwockyPrivateNames`
+(the class names like `NSTabBar`/`NSTabButton`/`NSGlassEffectView` and the KVC keys
+`title`/`attributedTitle`/`tintColor`). When a macOS beta moves something, there's
+one place to patch, and anyone auditing before they ship can read exactly what's
+private.
+
+Paired with it is a **canary**: `Tabberwocky.probe()` walks a live tabbed window and
+reports which of those names/keys are still present.
+
+```swift
+let result = Tabberwocky.probe()        // run in a DocumentGroup window with ≥2 tabs
+print(result)                           // ✓/✗ per class + key
+if !result.allFound { /* a beta moved something — investigate before shipping */ }
+```
+
+Run it against each beta and it goes red the moment Apple renames something, telling
+you *which* knob broke instead of leaving you eyeballing gray tabs. Adopters can even
+gate their own `start()` on `probe().allFound`. It doesn't make this App-Store-safe
+(nothing does) — it just makes the betas boring.
+
 ## Roadmap
 
 Tabberwocky is pre-2.0 and the API may still move; pin to a version. Planned:

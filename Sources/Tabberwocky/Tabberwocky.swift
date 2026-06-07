@@ -25,6 +25,30 @@
 
 import AppKit
 
+/// **The entire private-API blast radius, in one place.** Every private class name
+/// and KVC key Tabberwocky touches lives here — so when a macOS beta moves something,
+/// there's one table to patch, and anyone auditing before they ship can see exactly
+/// what's private. Use `Tabberwocky.probe()` to check these against a live window.
+public enum TabberwockyPrivateNames {
+    // View classes (matched by runtime class name)
+    public static let tabBar         = "NSTabBar"
+    public static let tabButton      = "NSTabButton"
+    public static let newTabButton   = "NSTabBarNewTabButton"
+    public static let glassEffect    = "NSGlassEffectView"          // macOS 26 only
+    public static let trackView      = "NSTabBarTrackView"
+    public static let scrollView     = "NSTabBarScrollView"
+    public static let clipView       = "NSTabBarClipView"
+    public static let documentView   = "NSTabBarDocumentView"
+    public static let backdropLayer  = "CABackdropLayer"            // CALayer subclass
+    // KVC keys / selectors
+    public static let titleKey       = "title"                      // read
+    public static let attributedTitleKey = "attributedTitle"       // write
+    public static let tintColorKey   = "tintColor"                  // write (glass)
+
+    /// The container views whose layers are cleared so the bar color shows through.
+    static let containers = [trackView, scrollView, clipView, documentView]
+}
+
 /// The colors Tabberwocky paints the tab bar with. Provide one via
 /// `Tabberwocky.shared.style`; it's evaluated on every re-apply, so it can read
 /// your app's live appearance.
@@ -181,18 +205,18 @@ public final class Tabberwocky {
     }
 
     private func styleBar(in window: NSWindow) {
+        let N = TabberwockyPrivateNames.self
         guard let root = window.contentView?.superview,
-              let bar = Tabberwocky.firstSubview(of: root, named: "NSTabBar") else { return }
+              let bar = Tabberwocky.firstSubview(of: root, named: N.tabBar) else { return }
         let s = style()
 
         // Bar: solid background. Hide the blur backdrop + clear containers so it reads.
         bar.tw_setLayerBackground(s.barBackground)
         for sub in bar.layer?.sublayers ?? []
-            where String(describing: type(of: sub)) == "CABackdropLayer" {
+            where String(describing: type(of: sub)) == N.backdropLayer {
             sub.isHidden = true
         }
-        for name in ["NSTabBarTrackView", "NSTabBarScrollView",
-                     "NSTabBarClipView", "NSTabBarDocumentView"] {
+        for name in N.containers {
             Tabberwocky.firstSubview(of: bar, named: name)?.tw_setLayerBackground(.clear)
         }
 
@@ -200,7 +224,7 @@ public final class Tabberwocky {
         // the tab-group's windows are in display order, matching the tab frames, so
         // tab[i] ↔ group.windows[i]. (Title-matching breaks on duplicate filenames
         // and when "show all extensions" is off.)
-        let tabs = Tabberwocky.allSubviews(of: bar, named: "NSTabButton")
+        let tabs = Tabberwocky.allSubviews(of: bar, named: N.tabButton)
             .sorted { $0.frame.minX < $1.frame.minX }
         let groupWindows = window.tabGroup?.windows ?? [window]
         let activeIndex = Tabberwocky.activeTabIndex(in: window)
@@ -217,9 +241,9 @@ public final class Tabberwocky {
             let font = s.labelFont ?? .systemFont(ofSize: 12, weight: active ? .medium : .regular)
 
             if s.flattenGlass,
-               let glass = Tabberwocky.firstSubview(of: tab, named: "NSGlassEffectView"),
-               glass.responds(to: Selector(("setTintColor:"))) {
-                glass.setValue(fill, forKey: "tintColor")
+               let glass = Tabberwocky.firstSubview(of: tab, named: N.glassEffect),
+               glass.responds(to: NSSelectorFromString("set" + N.tintColorKey.capitalized + ":")) {
+                glass.setValue(fill, forKey: N.tintColorKey)
             }
             tab.wantsLayer = true
             if let layer = tab.layer {
@@ -238,7 +262,7 @@ public final class Tabberwocky {
         }
 
         if let tint = s.newButtonTint,
-           let plus = Tabberwocky.firstSubview(of: bar, named: "NSTabBarNewTabButton") as? NSButton {
+           let plus = Tabberwocky.firstSubview(of: bar, named: N.newTabButton) as? NSButton {
             plus.contentTintColor = tint
         }
     }
@@ -254,8 +278,9 @@ public final class Tabberwocky {
     /// window's tab group (robust to duplicate filenames / hidden extensions).
     public static func documentURL(forTab tab: NSView, in window: NSWindow) -> URL? {
         guard let root = window.contentView?.superview,
-              let bar = firstSubview(of: root, named: "NSTabBar") else { return nil }
-        let tabs = allSubviews(of: bar, named: "NSTabButton").sorted { $0.frame.minX < $1.frame.minX }
+              let bar = firstSubview(of: root, named: TabberwockyPrivateNames.tabBar) else { return nil }
+        let tabs = allSubviews(of: bar, named: TabberwockyPrivateNames.tabButton)
+            .sorted { $0.frame.minX < $1.frame.minX }
         guard let i = tabs.firstIndex(of: tab) else { return nil }
         let windows = window.tabGroup?.windows ?? [window]
         return i < windows.count ? documentURL(for: windows[i]) : nil
@@ -289,20 +314,80 @@ public final class Tabberwocky {
     /// Read a tab's private `title` safely. Guarded by `responds(to:)` so it returns
     /// nil instead of raising `NSUnknownKeyException` if the key ever disappears.
     static func safeTitle(of tab: NSView) -> String? {
-        guard tab.responds(to: NSSelectorFromString("title")) else { return nil }
-        return tab.value(forKey: "title") as? String
+        guard tab.responds(to: NSSelectorFromString(TabberwockyPrivateNames.titleKey)) else { return nil }
+        return tab.value(forKey: TabberwockyPrivateNames.titleKey) as? String
     }
 
     /// Recolor a tab's label via its private-but-KVC-exposed `attributedTitle`.
     /// Note: this replaces the system-provided title; we assume it is plain text
     /// (no system-inserted glyphs / edited markers, which today live elsewhere).
     static func setLabel(_ tab: NSView, color: NSColor, font: NSFont) {
-        guard tab.responds(to: Selector(("setAttributedTitle:"))),
+        let setter = "set" + TabberwockyPrivateNames.attributedTitleKey.prefix(1).uppercased()
+                   + TabberwockyPrivateNames.attributedTitleKey.dropFirst() + ":"
+        guard tab.responds(to: NSSelectorFromString(setter)),
               let title = safeTitle(of: tab), !title.isEmpty else { return }
         let attributed = NSAttributedString(string: title, attributes: [
             .foregroundColor: color, .font: font
         ])
-        (tab as AnyObject).setValue(attributed, forKey: "attributedTitle")
+        (tab as AnyObject).setValue(attributed, forKey: TabberwockyPrivateNames.attributedTitleKey)
+    }
+
+    // MARK: - Probe (beta canary)
+
+    /// What `probe()` found in a live window — your early-warning for an OS that
+    /// moved something private.
+    public struct ProbeResult: CustomStringConvertible {
+        /// Private view-class name → was it found in the window's view tree.
+        public var classes: [String: Bool] = [:]
+        /// KVC key → did a sample tab/glass respond to it.
+        public var keys: [String: Bool] = [:]
+        /// True only if every name Tabberwocky relies on was found.
+        public var allFound: Bool {
+            // The glass is macOS-26-only; don't fail the canary on its absence.
+            classes.filter { $0.key != TabberwockyPrivateNames.glassEffect }.allSatisfy(\.value)
+                && keys.values.allSatisfy { $0 }
+        }
+        public var description: String {
+            let c = classes.sorted { $0.key < $1.key }.map { "\($0.value ? "✓" : "✗") \($0.key)" }
+            let k = keys.sorted { $0.key < $1.key }.map { "\($0.value ? "✓" : "✗") \($0.key)" }
+            return (["classes:"] + c + ["keys:"] + k).joined(separator: "\n")
+        }
+    }
+
+    /// Walk a live tabbed window and report which private names/keys are still there.
+    /// Run it against each macOS beta (in a throwaway DocumentGroup window with ≥2
+    /// tabs) — when Apple renames something, the result goes red and tells you which
+    /// knob broke, instead of you eyeballing gray tabs. Adopters can also gate their
+    /// own `start()` on `probe().allFound`.
+    @discardableResult
+    public static func probe(in window: NSWindow? = nil) -> ProbeResult {
+        let N = TabberwockyPrivateNames.self
+        var result = ProbeResult()
+        let app = NSApplication.shared   // NSApp can be nil in headless contexts (tests)
+        let target = window ?? app.keyWindow ?? app.windows.first
+        let root = target?.contentView?.superview
+        let bar = root.flatMap { firstSubview(of: $0, named: N.tabBar) }
+
+        result.classes[N.tabBar] = bar != nil
+        for name in N.containers {
+            result.classes[name] = bar.flatMap { firstSubview(of: $0, named: name) } != nil
+        }
+        let aTab = bar.flatMap { firstSubview(of: $0, named: N.tabButton) }
+        result.classes[N.tabButton] = aTab != nil
+        result.classes[N.newTabButton] = bar.flatMap { firstSubview(of: $0, named: N.newTabButton) } != nil
+        result.classes[N.glassEffect] = aTab.flatMap { firstSubview(of: $0, named: N.glassEffect) } != nil
+        result.classes[N.backdropLayer] = (bar?.layer?.sublayers ?? [])
+            .contains { String(describing: type(of: $0)) == N.backdropLayer }
+
+        result.keys[N.titleKey] = aTab?.responds(to: NSSelectorFromString(N.titleKey)) ?? false
+        result.keys[N.attributedTitleKey] = aTab?.responds(
+            to: NSSelectorFromString("set" + N.attributedTitleKey.prefix(1).uppercased()
+                                     + N.attributedTitleKey.dropFirst() + ":")) ?? false
+        let glass = aTab.flatMap { firstSubview(of: $0, named: N.glassEffect) }
+        result.keys[N.tintColorKey] = glass?.responds(
+            to: NSSelectorFromString("set" + N.tintColorKey.prefix(1).uppercased()
+                                     + N.tintColorKey.dropFirst() + ":")) ?? false
+        return result
     }
 }
 
