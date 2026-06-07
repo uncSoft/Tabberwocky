@@ -14,10 +14,7 @@ The common wisdom is that you **can't** restyle the native window/document tab b
 **See it in action** (themes, per-tab colors, right-click recolor, and collapsible
 tab groups):
 
-<video src="https://github.com/uncSoft/Tabberwocky/raw/main/assets/Tabberwocky_Demo.mp4" controls width="760"></video>
-
-<sub>▶︎ <a href="assets/Tabberwocky_Demo.mp4">Watch the full walkthrough</a> if the
-player doesn't load.</sub>
+![Tab groups: collapsing a group hides its tabs; expanding restores them in order](assets/tab-groups.gif)
 
 > [!WARNING]
 > Tabberwocky reaches into the **private** AppKit tab-bar view tree
